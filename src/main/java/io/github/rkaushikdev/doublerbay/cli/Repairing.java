@@ -9,9 +9,9 @@ import io.github.rkaushikdev.doublerbay.grid.Reference;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.ids.RepairId;
 import io.github.rkaushikdev.doublerbay.ids.Serial;
-import io.github.rkaushikdev.doublerbay.measure.FastenerSize;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.repair.DoublerPlan;
+import io.github.rkaushikdev.doublerbay.repair.Oversize;
 import io.github.rkaushikdev.doublerbay.repair.RepairPair;
 import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
 import io.github.rkaushikdev.doublerbay.repair.RepairScheme;
@@ -29,6 +29,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Help.Visibility;
 import picocli.CommandLine.Option;
@@ -95,12 +96,16 @@ public final class Repairing {
         return Decimals.text(length.inches());
     }
 
-    /** A repair worked out for a hole against a card, where it lands, and the tail it is on. */
-    record Drawn(RepairScheme scheme, Placement placement, Serial serial) {
+    /**
+     * A repair worked out for a hole against a card, where it lands, the tail it is on, and the
+     * oversize a worked fastener hole could take instead.
+     */
+    record Drawn(RepairScheme scheme, Placement placement, Serial serial, Optional<Oversize> oversize) {
         Drawn {
             Objects.requireNonNull(scheme, "scheme");
             Objects.requireNonNull(placement, "placement");
             Objects.requireNonNull(serial, "serial");
+            Objects.requireNonNull(oversize, "oversize");
         }
     }
 
@@ -120,14 +125,15 @@ public final class Repairing {
         Finding finding = unit.findings().latest(reference);
         TailContext tail = StoreContext.contextFor(unit, new TypeCatalogue(), finding.serial(), on);
         Placement placement = Placement.place(tail, finding);
+        Schemes.checkCutOut(finding, asInches(along), asInches(around));
         RepairScheme scheme = Schemes.selectScheme(
                 asInches(along),
                 asInches(around),
                 placement,
                 Reference.parse(page),
-                dash != null && dash != 0 ? new FastenerSize(dash) : null,
+                Schemes.fastenerOrStandard(dash),
                 temporary);
-        return new Drawn(scheme, placement, finding.serial());
+        return new Drawn(scheme, placement, finding.serial(), Schemes.oversizeFor(finding, placement));
     }
 
     /** Repairs: draw one, fit it, take it off. */
@@ -174,6 +180,7 @@ public final class Repairing {
                 return drawnFor(unit, held, along, around, page, dash, temporary, day);
             });
             say(Output.columns(drawingRows(drawn.scheme(), drawn.placement())));
+            drawn.oversize().ifPresent(oversize -> say("or instead of a doubler: " + oversize));
             return Main.OK;
         }
     }

@@ -1,10 +1,14 @@
 package io.github.rkaushikdev.doublerbay.repair;
 
+import io.github.rkaushikdev.doublerbay.Refused;
 import io.github.rkaushikdev.doublerbay.assess.Placement;
+import io.github.rkaushikdev.doublerbay.damage.Finding;
+import io.github.rkaushikdev.doublerbay.damage.Opening;
 import io.github.rkaushikdev.doublerbay.grid.JointMember;
 import io.github.rkaushikdev.doublerbay.grid.Reference;
 import io.github.rkaushikdev.doublerbay.measure.FastenerSize;
 import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.structure.FastenerRow;
 import io.github.rkaushikdev.doublerbay.structure.Margin;
 import io.github.rkaushikdev.doublerbay.structure.PanelKind;
 import io.github.rkaushikdev.doublerbay.structure.Region;
@@ -88,6 +92,54 @@ public final class Schemes {
             return Optional.empty();
         }
         return placement.member().map(Margin::member);
+    }
+
+    /** How far a torn edge is cut back to clean metal before a doubler is sized for the hole. */
+    public static final Length TRIM_BACK = Length.ofInches("0.125");
+
+    /** The fastener a drawing names by its dash number, or the standard one when it names none. */
+    public static FastenerSize fastenerOrStandard(Integer dash) {
+        return dash != null && dash != 0 ? new FastenerSize(dash) : STANDARD_FASTENER;
+    }
+
+    /**
+     * Refuse a cut out smaller than the opening on the card once its torn edges are trimmed back.
+     *
+     * <p>A doubler is sized off the cut out, and a cut out drawn to the torn opening leaves the tears
+     * in the skin under the patch, every one of them a crack starter. Nothing is checked for a card
+     * that is not an opening.
+     *
+     * @throws Refused when the cut out does not reach clean metal
+     */
+    public static void checkCutOut(Finding card, Length along, Length around) {
+        if (!(card.geometry() instanceof Opening opening)) {
+            return;
+        }
+        Opening clean = opening.needsTrimmingBeforeRepair() ? opening.trimmed(TRIM_BACK) : opening;
+        if (along.isLessThan(clean.along()) || around.isLessThan(clean.around())) {
+            throw new Refused(
+                    "cut out too small",
+                    "the cut out has to reach clean metal, at least "
+                            + clean.along().inches().toPlainString() + " by "
+                            + clean.around().inches().toPlainString());
+        }
+    }
+
+    /**
+     * The oversize a worked fastener hole in a row can take instead of a doubler, if it can take one.
+     *
+     * <p>The row the hole is in says which fastener was fitted and how far the hole sits from the
+     * sheet edge. Nothing is offered for a card that is not a worked fastener hole in a riveted row.
+     */
+    public static Optional<Oversize> oversizeFor(Finding card, Placement placement) {
+        if (!(card.geometry() instanceof Opening opening)
+                || !opening.wasAFastenerHole()
+                || placement.joint().isEmpty()
+                || placement.joint().get().rows().isEmpty()) {
+            return Optional.empty();
+        }
+        FastenerRow row = placement.joint().get().rowNearest(placement.edgeMargin());
+        return Oversizes.oversizeFor(opening, row.size(), row.offset());
     }
 
     /** A repair through a pressure boundary has to hold pressure when it is done. */

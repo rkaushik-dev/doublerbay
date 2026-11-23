@@ -2,6 +2,8 @@ package io.github.rkaushikdev.doublerbay.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.rkaushikdev.doublerbay.damage.DamageKind;
+import io.github.rkaushikdev.doublerbay.damage.Opening;
 import io.github.rkaushikdev.doublerbay.disposition.DispositionRecord;
 import io.github.rkaushikdev.doublerbay.disposition.DispositionState;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
@@ -319,5 +321,40 @@ class CliRepairingTest {
                         .output())
                 .contains("wrote 0 rows");
         assertThat(Files.readAllLines(written)).containsExactly(String.join(",", Export.REPAIR_HEADER));
+    }
+
+    private static String raisedHole(Database database, int sequence, Opening opening, String below, int stringer) {
+        FindingId reference = new FindingId(2025, sequence);
+        UnitOfWork.run(database, unit -> {
+            unit.findings()
+                    .raiseFinding(Sample.cardWith()
+                            .sequence(sequence)
+                            .kind(DamageKind.HOLE)
+                            .geometry(opening)
+                            .at(Sample.cabinPointOn(stringer, below))
+                            .build());
+            unit.dispositions()
+                    .save(DispositionRecord.raised(reference)
+                            .movedTo(DispositionState.ASSESSED, LocalDate.of(2025, 3, 14), "a.okonkwo"));
+        });
+        return reference.toString();
+    }
+
+    @Test
+    void aWorkedFastenerHoleIsOfferedAnOversizeBesideTheDoubler() {
+        Database database = stocked();
+        Opening worked = new Opening(Sample.inch("0.170"), Sample.inch("0.156"), false, true);
+        String printed =
+                draw(database, raisedHole(database, 5, worked, "0.500", 8)).output();
+        assertThat(printed).contains("or instead of a doubler: ream -5 to -6");
+    }
+
+    @Test
+    void aCutOutThatLeavesTheTornEdgesInIsRefused() {
+        Database database = stocked();
+        Opening torn = new Opening(Sample.inch("1.950"), Sample.inch("1.000"), true, false);
+        Ran answer = draw(database, raisedHole(database, 6, torn, "4.000", 10));
+        assertThat(answer.exitCode()).isNotZero();
+        assertThat(answer.failure()).contains("at least 2.200 by 1.250");
     }
 }

@@ -7,7 +7,6 @@ import io.github.rkaushikdev.doublerbay.grid.Offset;
 import io.github.rkaushikdev.doublerbay.grid.Reference;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.ids.RepairId;
-import io.github.rkaushikdev.doublerbay.measure.FastenerSize;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.repair.DoublerPlan;
 import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
@@ -65,10 +64,9 @@ final class RepairRoutes {
             Length along = Schemas.inches(body.along(), "repair length");
             Length around = Schemas.inches(body.around(), "repair width");
             Reference page = Reference.parse(body.page());
-            FastenerSize size = body.fastenerDash() != null && body.fastenerDash() != 0
-                    ? new FastenerSize(body.fastenerDash())
-                    : null;
-            RepairScheme scheme = Schemes.selectScheme(along, around, placement, page, size, body.temporary());
+            Schemes.checkCutOut(finding, along, around);
+            RepairScheme scheme = Schemes.selectScheme(
+                    along, around, placement, page, Schemes.fastenerOrStandard(body.fastenerDash()), body.temporary());
             RepairId reference = new RepairId(placement.chapter().value(), body.sequence());
             Length centreAlong = Schemas.inches(body.centreAlong(), "offset");
             Length centreAround = Schemas.inches(body.centreAround(), "offset");

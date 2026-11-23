@@ -74,12 +74,14 @@ public record FastenerSize(int dash) implements Comparable<FastenerSize> {
      * or has an elongated bore is not repaired by putting the same fastener back in it.
      */
     public static FastenerSize nextSizeUp(FastenerSize size) {
-        for (int dash : STOCKED_DASHES) {
-            if (dash > size.dash()) {
-                return new FastenerSize(dash);
-            }
-        }
-        throw new BadReading(size + " is the largest stocked fastener");
+        return sizesUp(size).stream()
+                .findFirst()
+                .orElseThrow(() -> new BadReading(size + " is the largest stocked fastener"));
+    }
+
+    /** Every stocked size bigger than this one, smallest first, none past the largest. */
+    public static List<FastenerSize> sizesUp(FastenerSize size) {
+        return stocked().stream().filter(one -> one.compareTo(size) > 0).toList();
     }
 
     /** The nominal shank, rounded to the thousandth the drawing carries. */
