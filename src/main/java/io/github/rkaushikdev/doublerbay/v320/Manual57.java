@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Chapter 57 of the V320 manual, allowable damage to wing skin.
@@ -77,6 +78,12 @@ public final class Manual57 {
     /** The taper a blend runs out at on wing skin. */
     public static final Taper BLEND = new Taper(30);
 
+    /**
+     * The share of the lower surface depth cap a score lying chordwise may use. The lower skin carries
+     * the wing's bending as spanwise tension, and a chordwise score lies straight across it.
+     */
+    public static final String CHORDWISE_SHARE = "0.50";
+
     /** Where nothing is allowable whatever it measures. */
     public static final List<Region> NOTHING_ALLOWED_IN =
             List.of(Region.FASTENER_ROW, Region.CUTOUT_CORNER, Region.CHEM_MILL_STEP);
@@ -99,15 +106,35 @@ public final class Manual57 {
 
     /**
      * One surface's score limits as the page writes them: the depth as a share of the plate, the
-     * floor on what is left as a share of the plate, and the absolute depth cap in inches.
+     * floor on what is left as a share of the plate, the absolute depth cap in inches, and the share
+     * of that cap a score lying chordwise may use where the surface states one.
      */
-    public record SurfaceLimits(String share, String residual, String cap) {
+    public record SurfaceLimits(String share, String residual, String cap, Optional<String> acrossTheLoad) {
 
-        /** The three numbers, as decimal text. */
+        /** The numbers, as decimal text. */
         public SurfaceLimits {
             Objects.requireNonNull(share, "share");
             Objects.requireNonNull(residual, "residual");
             Objects.requireNonNull(cap, "cap");
+            Objects.requireNonNull(acrossTheLoad, "acrossTheLoad");
+        }
+
+        /** A surface that treats a score the same whichever way it lies. */
+        public SurfaceLimits(String share, String residual, String cap) {
+            this(share, residual, cap, Optional.empty());
+        }
+
+        /** The limits for a score on this surface, held to the share across the load where there is one. */
+        LimitSet scoreLimits() {
+            LimitSet limits = LimitSet.allowable()
+                    .withMaxDepth(inches(cap))
+                    .withMaxDepthFraction(new Ratio(share))
+                    .withMinResidualFraction(new Ratio(residual))
+                    .withMinEdgeMarginDiameters(TWO_AND_A_HALF_DIAMETERS)
+                    .withBlendTaper(BLEND);
+            return acrossTheLoad
+                    .map(text -> limits.withAcrossLoadShare(new Ratio(text)))
+                    .orElse(limits);
         }
     }
 
@@ -116,7 +143,7 @@ public final class Manual57 {
     private static Map<PanelKind, SurfaceLimits> surfaceLimits() {
         Map<PanelKind, SurfaceLimits> held = new LinkedHashMap<>();
         held.put(PanelKind.WING_UPPER, new SurfaceLimits("0.05", "0.88", "0.010"));
-        held.put(PanelKind.WING_LOWER, new SurfaceLimits("0.025", "0.94", "0.005"));
+        held.put(PanelKind.WING_LOWER, new SurfaceLimits("0.025", "0.94", "0.005", Optional.of(CHORDWISE_SHARE)));
         return Collections.unmodifiableMap(held);
     }
 
@@ -174,15 +201,8 @@ public final class Manual57 {
     private static List<LimitRow> scoreRows() {
         List<LimitRow> rows = new ArrayList<>();
         for (DamageKind kind : List.of(DamageKind.SCRATCH, DamageKind.GOUGE, DamageKind.NICK)) {
-            SURFACE_LIMITS.forEach((surface, limits) -> rows.add(new LimitRow(
-                    new LimitKey(kind, surface),
-                    LimitSet.allowable()
-                            .withMaxDepth(inches(limits.cap()))
-                            .withMaxDepthFraction(new Ratio(limits.share()))
-                            .withMinResidualFraction(new Ratio(limits.residual()))
-                            .withMinEdgeMarginDiameters(TWO_AND_A_HALF_DIAMETERS)
-                            .withBlendTaper(BLEND),
-                    MATERIAL_LOSS)));
+            SURFACE_LIMITS.forEach((surface, limits) ->
+                    rows.add(new LimitRow(new LimitKey(kind, surface), limits.scoreLimits(), MATERIAL_LOSS)));
             rows.add(new LimitRow(
                     new LimitKey(kind),
                     LimitSet.allowable()

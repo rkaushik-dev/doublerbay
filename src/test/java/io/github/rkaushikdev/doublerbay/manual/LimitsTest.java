@@ -76,10 +76,10 @@ class LimitsTest {
     }
 
     @Test
-    void aHoopLoadedScoreGetsItsShareOfTheTighterCap() {
+    void aScoreAcrossTheLoadGetsItsShareOfTheTighterCap() {
         LimitSet page = limits().withMaxDepth(inch("0.005"))
                 .withMaxDepthFraction(new Ratio("0.10"))
-                .withHoopLoadedShare(new Ratio("0.50"));
+                .withAcrossLoadShare(new Ratio("0.50"));
         assertThat(page.depthCap(inch("0.032"), true)).contains(new Length(2));
         assertThat(page.depthCap(inch("0.032"), false)).contains(new Length(3));
         assertThat(page.depthCap(SKIN, true)).contains(new Length(2));
@@ -87,32 +87,32 @@ class LimitsTest {
     }
 
     @Test
-    void aPageWithNoHoopShareTreatsEveryDirectionAlike() {
+    void aPageWithNoShareAcrossTheLoadTreatsEveryDirectionAlike() {
         LimitSet page = limits().withMaxDepth(inch("0.005"));
         assertThat(page.depthCap(SKIN, true)).isEqualTo(page.depthCap(SKIN, false));
     }
 
     @Test
-    void aHoopShareIsAPartOfACapThatExists() {
-        assertThatThrownBy(() -> limits().withMaxDepth(inch("0.005")).withHoopLoadedShare(new Ratio("1.20")))
+    void aShareAcrossTheLoadIsAPartOfACapThatExists() {
+        assertThatThrownBy(() -> limits().withMaxDepth(inch("0.005")).withAcrossLoadShare(new Ratio("1.20")))
                 .isInstanceOf(BadReading.class)
                 .hasMessageContaining("part of the depth cap");
-        assertThatThrownBy(() -> limits().withMaxDepth(inch("0.005")).withHoopLoadedShare(new Ratio("0")))
+        assertThatThrownBy(() -> limits().withMaxDepth(inch("0.005")).withAcrossLoadShare(new Ratio("0")))
                 .isInstanceOf(BadReading.class)
                 .hasMessageContaining("part of the depth cap");
-        assertThatThrownBy(() -> limits().withHoopLoadedShare(new Ratio("0.50")))
+        assertThatThrownBy(() -> limits().withAcrossLoadShare(new Ratio("0.50")))
                 .isInstanceOf(BadReading.class)
                 .hasMessageContaining("needs a depth cap");
     }
 
     @Test
-    void aHoopShareIsPartOfWhatMakesTwoPagesTheSame() {
+    void aShareAcrossTheLoadIsPartOfWhatMakesTwoPagesTheSame() {
         LimitSet plain = limits().withMaxDepthFraction(new Ratio("0.05"));
-        LimitSet shared = plain.withHoopLoadedShare(new Ratio("0.50"));
+        LimitSet shared = plain.withAcrossLoadShare(new Ratio("0.50"));
         assertThat(shared).isNotEqualTo(plain);
-        assertThat(shared).isEqualTo(plain.withHoopLoadedShare(new Ratio("0.5000")));
-        assertThat(shared).hasSameHashCodeAs(plain.withHoopLoadedShare(new Ratio("0.5000")));
-        assertThat(shared).hasToString("depth 5.00%, along the body 50.00% of that");
+        assertThat(shared).isEqualTo(plain.withAcrossLoadShare(new Ratio("0.5000")));
+        assertThat(shared).hasSameHashCodeAs(plain.withAcrossLoadShare(new Ratio("0.5000")));
+        assertThat(shared).hasToString("depth 5.00%, across the load 50.00% of that");
     }
 
     @Test

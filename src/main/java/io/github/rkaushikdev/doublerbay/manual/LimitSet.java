@@ -36,7 +36,7 @@ public record LimitSet(
         boolean allowed,
         Optional<Length> maxDepth,
         Optional<Ratio> maxDepthFraction,
-        Optional<Ratio> hoopLoadedShare,
+        Optional<Ratio> acrossLoadShare,
         Optional<Length> maxLength,
         Optional<BigDecimal> maxArea,
         Optional<Ratio> maxSharpness,
@@ -50,7 +50,7 @@ public record LimitSet(
     public LimitSet {
         Objects.requireNonNull(maxDepth, "maxDepth");
         Objects.requireNonNull(maxDepthFraction, "maxDepthFraction");
-        Objects.requireNonNull(hoopLoadedShare, "hoopLoadedShare");
+        Objects.requireNonNull(acrossLoadShare, "acrossLoadShare");
         Objects.requireNonNull(maxLength, "maxLength");
         Objects.requireNonNull(maxArea, "maxArea");
         Objects.requireNonNull(maxSharpness, "maxSharpness");
@@ -70,13 +70,13 @@ public record LimitSet(
                         minResidualFraction)) {
             throw new BadReading("a limit set that allows nothing does not carry limits");
         }
-        if (hoopLoadedShare.isPresent()
-                && (hoopLoadedShare.get().value().signum() <= 0
-                        || hoopLoadedShare.get().value().compareTo(BigDecimal.ONE) > 0)) {
-            throw new BadReading("a hoop loaded share is a part of the depth cap");
+        if (acrossLoadShare.isPresent()
+                && (acrossLoadShare.get().value().signum() <= 0
+                        || acrossLoadShare.get().value().compareTo(BigDecimal.ONE) > 0)) {
+            throw new BadReading("a share across the load is a part of the depth cap");
         }
-        if (hoopLoadedShare.isPresent() && maxDepth.isEmpty() && maxDepthFraction.isEmpty()) {
-            throw new BadReading("a hoop loaded share needs a depth cap to be a share of");
+        if (acrossLoadShare.isPresent() && maxDepth.isEmpty() && maxDepthFraction.isEmpty()) {
+            throw new BadReading("a share across the load needs a depth cap to be a share of");
         }
         if (maxArea.isPresent() && maxArea.get().signum() <= 0) {
             throw new BadReading("an area limit is an area");
@@ -130,9 +130,9 @@ public record LimitSet(
         return with(draft -> draft.maxDepthFraction = Optional.of(fraction));
     }
 
-    /** The same limits with a share of the depth cap a score lying along the body may use. */
-    public LimitSet withHoopLoadedShare(Ratio share) {
-        return with(draft -> draft.hoopLoadedShare = Optional.of(share));
+    /** The same limits with a share of the depth cap a score lying across the principal load may use. */
+    public LimitSet withAcrossLoadShare(Ratio share) {
+        return with(draft -> draft.acrossLoadShare = Optional.of(share));
     }
 
     /** The same limits with a length cap. */
@@ -180,7 +180,7 @@ public record LimitSet(
         private final boolean allowed;
         private Optional<Length> maxDepth = Optional.empty();
         private Optional<Ratio> maxDepthFraction = Optional.empty();
-        private Optional<Ratio> hoopLoadedShare = Optional.empty();
+        private Optional<Ratio> acrossLoadShare = Optional.empty();
         private Optional<Length> maxLength = Optional.empty();
         private Optional<BigDecimal> maxArea = Optional.empty();
         private Optional<Ratio> maxSharpness = Optional.empty();
@@ -198,7 +198,7 @@ public record LimitSet(
             this(from.allowed);
             maxDepth = from.maxDepth;
             maxDepthFraction = from.maxDepthFraction;
-            hoopLoadedShare = from.hoopLoadedShare;
+            acrossLoadShare = from.acrossLoadShare;
             maxLength = from.maxLength;
             maxArea = from.maxArea;
             maxSharpness = from.maxSharpness;
@@ -214,7 +214,7 @@ public record LimitSet(
                     allowed,
                     maxDepth,
                     maxDepthFraction,
-                    hoopLoadedShare,
+                    acrossLoadShare,
                     maxLength,
                     maxArea,
                     maxSharpness,
@@ -240,19 +240,20 @@ public record LimitSet(
     }
 
     /**
-     * The deepest a score may be, which for one lying along the body is the share of the cap the page
-     * allows it, to the nearest thousandth with a tie going to the even one.
+     * The deepest a score may be, which for one lying across the principal load is the share of the cap
+     * the page allows it, to the nearest thousandth with a tie going to the even one.
      *
      * <p>Hoop stress in a pressurised barrel is roughly twice the longitudinal stress, and it acts
-     * across a score that lies along the body. The page that states a share means the same score at the
-     * same depth is fine running round the barrel and too deep running along it.
+     * across a score that lies along the body. On the lower wing it is the spanwise tension, and that
+     * acts across a score lying chordwise, which on the report form is the same bearing. The page that
+     * states a share means the same score at the same depth is fine one way and too deep the other.
      */
-    public Optional<Length> depthCap(Length thickness, boolean hoopLoaded) {
+    public Optional<Length> depthCap(Length thickness, boolean acrossTheLoad) {
         Optional<Length> cap = depthCap(thickness);
-        if (!hoopLoaded || hoopLoadedShare.isEmpty()) {
+        if (!acrossTheLoad || acrossLoadShare.isEmpty()) {
             return cap;
         }
-        return cap.map(full -> hoopLoadedShare.get().of(full));
+        return cap.map(full -> acrossLoadShare.get().of(full));
     }
 
     /** The least metal that may be left, taking the higher of the two forms. */
@@ -306,7 +307,7 @@ public record LimitSet(
                 && allowed == that.allowed
                 && maxDepth.equals(that.maxDepth)
                 && maxDepthFraction.equals(that.maxDepthFraction)
-                && hoopLoadedShare.equals(that.hoopLoadedShare)
+                && acrossLoadShare.equals(that.acrossLoadShare)
                 && maxLength.equals(that.maxLength)
                 && sameAmount(maxArea, that.maxArea)
                 && maxSharpness.equals(that.maxSharpness)
@@ -323,7 +324,7 @@ public record LimitSet(
                 allowed,
                 maxDepth,
                 maxDepthFraction,
-                hoopLoadedShare,
+                acrossLoadShare,
                 maxLength,
                 maxArea.map(BigDecimal::stripTrailingZeros),
                 maxSharpness,
@@ -353,7 +354,7 @@ public record LimitSet(
         List<String> parts = new ArrayList<>();
         maxDepth.ifPresent(depth -> parts.add("depth " + depth.inches().toPlainString()));
         maxDepthFraction.ifPresent(fraction -> parts.add("depth " + fraction));
-        hoopLoadedShare.ifPresent(share -> parts.add("along the body " + share + " of that"));
+        acrossLoadShare.ifPresent(share -> parts.add("across the load " + share + " of that"));
         maxLength.ifPresent(length -> parts.add("length " + length.inches().toPlainString()));
         maxArea.ifPresent(area -> parts.add("area " + Decimals.text(area)));
         maxSharpness.ifPresent(sharpness -> parts.add("sharpness " + sharpness));

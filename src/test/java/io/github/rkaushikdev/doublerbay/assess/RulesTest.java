@@ -142,16 +142,16 @@ class RulesTest {
     }
 
     @Test
-    void aScoreAlongTheBodyIsHeldToItsHoopShareOfTheCap() {
-        LimitSet page = LimitSet.allowable().withMaxDepth(inch("0.004")).withHoopLoadedShare(new Ratio("0.50"));
+    void aScoreAlongTheBodyIsHeldToItsShareAcrossTheLoad() {
+        LimitSet page = LimitSet.allowable().withMaxDepth(inch("0.004")).withAcrossLoadShare(new Ratio("0.50"));
         Check along = Rules.depthCheck(caseOf(scoreAt("0.003", 0), page)).orElseThrow();
         Check around = Rules.depthCheck(caseOf(scoreAt("0.003", 90), page)).orElseThrow();
         assertThat(along.passed()).isFalse();
-        assertThat(along.reason().detail()).contains("against a cap of 0.002 along the body");
+        assertThat(along.reason().detail()).contains("against a cap of 0.002 across the load");
         assertThat(around.passed()).isTrue();
         assertThat(around.reason().detail())
                 .contains("against a cap of 0.004 at")
-                .doesNotContain("along the body");
+                .doesNotContain("across the load");
     }
 
     @Test
@@ -160,7 +160,7 @@ class RulesTest {
                         caseOf(scoreAt("0.003", 0), LimitSet.allowable().withMaxDepth(inch("0.004"))))
                 .orElseThrow();
         assertThat(along.passed()).isTrue();
-        assertThat(along.reason().detail()).doesNotContain("along the body");
+        assertThat(along.reason().detail()).doesNotContain("across the load");
     }
 
     @Test

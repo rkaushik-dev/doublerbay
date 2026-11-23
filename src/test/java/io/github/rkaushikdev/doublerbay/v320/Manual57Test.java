@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.rkaushikdev.doublerbay.damage.DamageKind;
 import io.github.rkaushikdev.doublerbay.manual.LimitRow;
 import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.measure.Ratio;
 import io.github.rkaushikdev.doublerbay.structure.PanelKind;
 import io.github.rkaushikdev.doublerbay.structure.Region;
 import java.time.LocalDate;
@@ -60,6 +61,29 @@ class Manual57Test {
         Set<String> references =
                 Manual57.PAGES.stream().map(page -> page.reference().toString()).collect(Collectors.toSet());
         assertThat(references).isEqualTo(Set.of("57-10-01", "57-20-01", "57-30-01", "57-40-01"));
+    }
+
+    @Test
+    void aChordwiseScoreOnTheLowerSurfaceGetsHalfTheCap() {
+        Length plate = inch("0.200");
+        for (DamageKind kind : List.of(DamageKind.SCRATCH, DamageKind.GOUGE, DamageKind.NICK)) {
+            LimitRow lower = lookUp(kind);
+            assertThat(lower.limits().acrossLoadShare()).contains(new Ratio(Manual57.CHORDWISE_SHARE));
+            assertThat(lower.limits().depthCap(plate, false)).contains(inch("0.005"));
+            assertThat(lower.limits().depthCap(plate, true)).contains(new Length(2));
+            LimitRow upper = lookUp(kind, PanelKind.WING_UPPER);
+            assertThat(upper.limits().acrossLoadShare()).isEmpty();
+            assertThat(upper.limits().depthCap(plate, true))
+                    .isEqualTo(upper.limits().depthCap(plate, false));
+        }
+    }
+
+    @Test
+    void aSurfaceStatedWithoutAShareTreatsEveryDirectionAlike() {
+        Manual57.SurfaceLimits plain = new Manual57.SurfaceLimits("0.05", "0.88", "0.010");
+        assertThat(plain.acrossTheLoad()).isEmpty();
+        assertThat(Manual57.SURFACE_LIMITS.get(PanelKind.WING_LOWER).acrossTheLoad())
+                .contains("0.50");
     }
 
     @Test

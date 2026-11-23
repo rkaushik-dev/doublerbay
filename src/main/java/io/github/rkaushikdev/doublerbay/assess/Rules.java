@@ -96,17 +96,18 @@ public final class Rules {
     /**
      * Depth against the cap, with rework on the table only where grinding is allowed.
      *
-     * <p>A score lying along the body on a page that states a hoop loaded share is held to that share of
-     * the cap, and the trail says so, because the same depth running round the barrel would have passed.
+     * <p>A score lying across the principal load on a page that states a share for it is held to that
+     * share of the cap, and the trail says so, because the same depth running the other way would have
+     * passed.
      */
     public static Optional<Check> depthCheck(Case held) {
         Optional<Length> depth = held.depth();
-        boolean hoopLoaded = isHoopLoaded(held);
-        Optional<Length> cap = held.limits().depthCap(held.thickness(), hoopLoaded);
+        boolean across = liesAcrossTheLoad(held);
+        Optional<Length> cap = held.limits().depthCap(held.thickness(), across);
         if (depth.isEmpty() || cap.isEmpty()) {
             return Optional.empty();
         }
-        String along = hoopLoaded && held.limits().hoopLoadedShare().isPresent() ? " along the body" : "";
+        String along = across && held.limits().acrossLoadShare().isPresent() ? " across the load" : "";
         String detail = inches(depth.get()) + " deep against a cap of " + inches(cap.get()) + along + " at "
                 + inches(held.thickness());
         if (depth.get().isAtMost(cap.get())) {
@@ -116,8 +117,11 @@ public final class Rules {
         return answer(false, "depth", detail, landing);
     }
 
-    /** A score lying along the body, which hoop stress pulls open. */
-    static boolean isHoopLoaded(Case held) {
+    /**
+     * A score lying aft along the body axis, which is across the principal load on both skins: hoop
+     * stress pulls it open on the barrel, and on the wing it lies chordwise across the spanwise bending.
+     */
+    static boolean liesAcrossTheLoad(Case held) {
         return held.finding().geometry() instanceof Scoring scoring && scoring.isHoopLoaded();
     }
 
