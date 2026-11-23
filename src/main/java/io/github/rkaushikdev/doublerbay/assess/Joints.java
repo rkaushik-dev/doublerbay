@@ -4,7 +4,9 @@ import io.github.rkaushikdev.doublerbay.damage.Crack;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.damage.Scoring;
 import io.github.rkaushikdev.doublerbay.measure.Angle;
+import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.structure.Joint;
+import io.github.rkaushikdev.doublerbay.structure.JointKind;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -17,11 +19,13 @@ import java.util.function.Function;
  * loaded strip of skin on the aeroplane, sitting in the stress field of a hole, and the same
  * measurement means something entirely different.
  *
- * <p>Three rules, and none of them are about size. Whether the damage sits inside the edge margin,
+ * <p>Three rules for a riveted joint, and none of them are about size. Whether the damage sits inside the edge margin,
  * because a cut between the hole and the panel edge has taken the material that was carrying the load
  * past the hole. Whether it runs along the row, because a crack parallel to a rivet line links holes
  * and a crack across one does not. And whether the joint is fatigue critical, because a longitudinal
  * lap joint is where the fleet's cracks actually come from.
+ *
+ * <p>A bonded joint has no rows for those three to read, and its own rule is about the bond line.
  *
  * <p>These are additions rather than replacements. A damage in a joint still has to pass every
  * ordinary limit, and these rules can only make the answer worse.
@@ -34,9 +38,12 @@ public final class Joints {
     /** A cut this far off the row's own line, in degrees, still counts as running along it. */
     public static final int ALONG_WITHIN_DEGREES = 20;
 
+    /** How far off the member a bonded joint's bond line runs, which is the band the bond rule covers. */
+    public static final Length BOND_LINE = Length.ofInches("1.000");
+
     /** The joint rules, in the order they run. */
-    public static final List<Function<JointCase, Optional<Check>>> JOINT_CHECKS =
-            List.of(Joints::insideMarginCheck, Joints::alongTheRowCheck, Joints::fatigueCriticalCheck);
+    public static final List<Function<JointCase, Optional<Check>>> JOINT_CHECKS = List.of(
+            Joints::insideMarginCheck, Joints::alongTheRowCheck, Joints::fatigueCriticalCheck, Joints::bondLineCheck);
 
     private Joints() {}
 
@@ -72,12 +79,12 @@ public final class Joints {
             return Optional.empty();
         }
         String written = held.toTheRow().inches().toPlainString() + " in from the nearest row";
-        if (held.margin().isGreaterThan(held.toTheRow())) {
-            return Optional.of(new Check(
-                    Rules.fail("joint edge margin", "inside the fastener row, " + written), Disposition.REPAIRABLE));
-        }
-        return Optional.of(
-                new Check(Rules.pass("joint edge margin", "clear of the row, " + written), Disposition.REPAIRABLE));
+        return Rules.flag(
+                "joint edge margin",
+                held.margin().isGreaterThan(held.toTheRow()),
+                "clear of the row, " + written,
+                "inside the fastener row, " + written,
+                Disposition.REPAIRABLE);
     }
 
     /** A cut running along a rivet line links holes, and one across it does not. */
@@ -86,15 +93,12 @@ public final class Joints {
         if (along.isEmpty() || !held.isInTheRow()) {
             return Optional.empty();
         }
-        if (along.get()) {
-            return Optional.of(new Check(
-                    Rules.fail(
-                            "along the row",
-                            "runs with the rivet line on " + held.joint().kind()),
-                    Disposition.REPAIRABLE));
-        }
-        return Optional.of(new Check(
-                Rules.pass("along the row", "runs across the rivet line rather than with it"), Disposition.REPAIRABLE));
+        return Rules.flag(
+                "along the row",
+                along.get(),
+                "runs across the rivet line rather than with it",
+                "runs with the rivet line on " + held.joint().kind(),
+                Disposition.REPAIRABLE);
     }
 
     /** A damage in a fatigue critical joint is never left as it stands. */
@@ -102,14 +106,34 @@ public final class Joints {
         if (!held.isInTheRow()) {
             return Optional.empty();
         }
-        if (held.joint().isFatigueCritical()) {
-            return Optional.of(new Check(
-                    Rules.fail("fatigue critical", held.joint().kind() + " carries the pressurisation cycle"),
-                    Disposition.REWORKABLE));
+        return Rules.flag(
+                "fatigue critical",
+                held.joint().isFatigueCritical(),
+                held.joint().kind() + " is not a fatigue critical joint",
+                held.joint().kind() + " carries the pressurisation cycle",
+                Disposition.REWORKABLE);
+    }
+
+    /**
+     * A damage on the bond line of a bonded joint may have broken the bond under it.
+     *
+     * <p>A bonded joint has no rows, so none of the fastener rules reach it, and the bond is not
+     * something anybody can see from outside. Damage inside the bond line has loaded an adhesive joint
+     * the book has no repair for, and it goes to the manufacturer with a request to tap test the joint
+     * either side of it.
+     */
+    public static Optional<Check> bondLineCheck(JointCase held) {
+        if (held.joint().kind() != JointKind.BONDED) {
+            return Optional.empty();
         }
-        return Optional.of(new Check(
-                Rules.pass("fatigue critical", held.joint().kind() + " is not a fatigue critical joint"),
-                Disposition.REWORKABLE));
+        String where = held.margin().inches().toPlainString() + " in off "
+                + held.joint().follows();
+        return Rules.flag(
+                "bond line",
+                held.margin().isAtMost(BOND_LINE),
+                "clear of the bond line, " + where,
+                "on the bond line of the " + held.joint().kind() + ", " + where,
+                Disposition.OUT_OF_LIMITS);
     }
 
     /** Every joint rule that has something to say about this damage, none when it is on no joint. */

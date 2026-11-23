@@ -285,4 +285,46 @@ class AssessJointsTest {
     void aDamageClearOfTheRowCollectsNone() {
         assertThat(Joints.checksFor(caseOf("8.000"), joint())).isEmpty();
     }
+
+    private static JointCase onABond(String margin) {
+        Joint bonded = new Joint(JointKind.BONDED, new Stringer(6, Side.LEFT), List.of());
+        return new JointCase(caseOf(null, margin, 0, DamageKind.CRACK, DamageOrigin.FATIGUE), bonded);
+    }
+
+    @Test
+    void aDamageOnTheBondLineOfABondedJointGoesToTheManufacturer() {
+        Check checked = Joints.bondLineCheck(onABond("0.750")).orElseThrow();
+        assertThat(checked.passed()).isFalse();
+        assertThat(checked.outcome()).isSameAs(Disposition.OUT_OF_LIMITS);
+        assertThat(checked.reason().detail()).isEqualTo("on the bond line of the bonded joint, 0.750 in off S-6L");
+        assertThat(Joints.bondLineCheck(onABond("1.000")).orElseThrow().passed())
+                .isFalse();
+    }
+
+    @Test
+    void aDamageClearOfTheBondLineGetsPastTheBondRule() {
+        Check checked = Joints.bondLineCheck(onABond("1.001")).orElseThrow();
+        assertThat(checked.passed()).isTrue();
+        assertThat(checked.reason().detail()).startsWith("clear of the bond line");
+    }
+
+    @Test
+    void theBondRuleStandsAsideOnARivetedJointAndTheRowRulesOnABondedOne() {
+        assertThat(Joints.bondLineCheck(held("0.500"))).isEmpty();
+        List<Check> onTheBond =
+                Joints.checksFor(onABond("0.500").subject(), onABond("0.500").joint());
+        assertThat(onTheBond).hasSize(1);
+        assertThat(onTheBond.get(0).reason().rule()).isEqualTo("bond line");
+    }
+
+    @Test
+    void theRowRulesReadTheSameThroughTheSharedAnswers() {
+        Check inside = Joints.insideMarginCheck(held("0.700")).orElseThrow();
+        assertThat(inside.reason().rule()).isEqualTo("joint edge margin");
+        assertThat(inside.reason().detail()).startsWith("inside the fastener row, ");
+        Check fatigue = Joints.fatigueCriticalCheck(held("0.400")).orElseThrow();
+        assertThat(fatigue.passed()).isFalse();
+        assertThat(fatigue.outcome()).isSameAs(Disposition.REWORKABLE);
+        assertThat(fatigue.reason().detail()).isEqualTo("lap joint carries the pressurisation cycle");
+    }
 }

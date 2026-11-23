@@ -164,7 +164,9 @@ class AssessWithJointsTest {
         Set<String> named = named(assessed(card(crack(0), onARow())));
         Set<String> jointRules = new HashSet<>(Set.of("joint edge margin", "along the row", "fatigue critical"));
         jointRules.retainAll(named);
-        assertThat(jointRules).hasSize(Joints.JOINT_CHECKS.size());
+        // The bond line rule only ever fires on a bonded joint, which has no rows for these three.
+        assertThat(jointRules).hasSize(Joints.JOINT_CHECKS.size() - 1);
+        assertThat(named).doesNotContain("bond line");
     }
 
     @Test

@@ -67,7 +67,7 @@ public final class Rules {
         return length.inches().toPlainString();
     }
 
-    private static Optional<Check> answer(boolean passed, String rule, String detail, Disposition onFailure) {
+    static Optional<Check> answer(boolean passed, String rule, String detail, Disposition onFailure) {
         return Optional.of(new Check(passed ? pass(rule, detail) : fail(rule, detail), onFailure));
     }
 
@@ -75,8 +75,7 @@ public final class Rules {
      * A rule that is a yes or no about the damage rather than a number against a limit, reading one
      * detail when the fault is there and another when it is not.
      */
-    private static Optional<Check> flag(
-            String rule, boolean fault, String clear, String faulted, Disposition onFailure) {
+    static Optional<Check> flag(String rule, boolean fault, String clear, String faulted, Disposition onFailure) {
         return answer(!fault, rule, fault ? faulted : clear, onFailure);
     }
 

@@ -62,11 +62,12 @@ public final class Regions {
         Length left = new Length(thin.mils() - cut.get().mils());
         String written =
                 left.inches().toPlainString() + " in left of " + thin.inches().toPlainString() + " in on the thin side";
-        if (left.mils() <= 0) {
-            return Optional.of(new Check(
-                    Rules.fail("step residual", "a blend here goes through, " + written), Disposition.REPAIRABLE));
-        }
-        return Optional.of(new Check(Rules.pass("step residual", written), Disposition.REPAIRABLE));
+        return Rules.flag(
+                "step residual",
+                left.mils() <= 0,
+                written,
+                "a blend here goes through, " + written,
+                Disposition.REPAIRABLE);
     }
 
     /** A crack at a cutout corner is a different problem from one anywhere else. */
@@ -77,13 +78,12 @@ public final class Regions {
         }
         String where = held.region() == Region.CUTOUT_CORNER ? "at the corner" : "in the keep out";
         String length = crack.length().inches().toPlainString();
-        if (crack.length().isAtLeast(CORNER_CRACK)) {
-            return Optional.of(new Check(
-                    Rules.fail("cutout corner", length + " in crack " + where + ", past what the book covers"),
-                    Disposition.OUT_OF_LIMITS));
-        }
-        return Optional.of(
-                new Check(Rules.pass("cutout corner", length + " in crack " + where), Disposition.OUT_OF_LIMITS));
+        return Rules.flag(
+                "cutout corner",
+                crack.length().isAtLeast(CORNER_CRACK),
+                length + " in crack " + where,
+                length + " in crack " + where + ", past what the book covers",
+                Disposition.OUT_OF_LIMITS);
     }
 
     /** Nothing under a fitted doubler was measured without taking it off. */
@@ -91,9 +91,11 @@ public final class Regions {
         if (held.region() != Region.UNDER_DOUBLER) {
             return Optional.empty();
         }
-        return Optional.of(new Check(
-                Rules.fail("under a doubler", "the doubler comes off before this can be measured or blended"),
-                Disposition.REPAIRABLE));
+        return Rules.answer(
+                false,
+                "under a doubler",
+                "the doubler comes off before this can be measured or blended",
+                Disposition.REPAIRABLE);
     }
 
     /** Every region rule that has something to say about this damage. */
