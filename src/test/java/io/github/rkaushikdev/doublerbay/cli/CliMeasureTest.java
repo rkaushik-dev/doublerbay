@@ -38,7 +38,7 @@ class CliMeasureTest {
 
     private static String raised(Database database) {
         UnitOfWork.run(database, unit -> {
-            unit.findings().raiseFinding(Sample.card(1, Sample.cabinPointOn(10)));
+            unit.findings().raiseFinding(Sample.card(1, Sample.cabinPointOn(10, "4.000")));
             unit.dispositions()
                     .save(DispositionRecord.raised(AGAINST).movedTo(DispositionState.ASSESSED, DAY, "a.okonkwo"));
         });

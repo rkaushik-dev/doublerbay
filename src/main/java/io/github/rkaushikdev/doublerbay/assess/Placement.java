@@ -4,8 +4,10 @@ import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.fleet.TailContext;
 import io.github.rkaushikdev.doublerbay.grid.Chapter;
+import io.github.rkaushikdev.doublerbay.grid.Frame;
 import io.github.rkaushikdev.doublerbay.grid.FuselagePoint;
 import io.github.rkaushikdev.doublerbay.grid.Offset;
+import io.github.rkaushikdev.doublerbay.grid.Stringer;
 import io.github.rkaushikdev.doublerbay.grid.WingPoint;
 import io.github.rkaushikdev.doublerbay.ids.PanelId;
 import io.github.rkaushikdev.doublerbay.measure.FastenerSize;
@@ -14,6 +16,7 @@ import io.github.rkaushikdev.doublerbay.structure.Airframe;
 import io.github.rkaushikdev.doublerbay.structure.FuselagePanel;
 import io.github.rkaushikdev.doublerbay.structure.InstalledDoubler;
 import io.github.rkaushikdev.doublerbay.structure.Joint;
+import io.github.rkaushikdev.doublerbay.structure.Margin;
 import io.github.rkaushikdev.doublerbay.structure.Material;
 import io.github.rkaushikdev.doublerbay.structure.PanelBuild;
 import io.github.rkaushikdev.doublerbay.structure.PanelKind;
@@ -26,6 +29,7 @@ import io.github.rkaushikdev.doublerbay.structure.WingMargin;
 import io.github.rkaushikdev.doublerbay.structure.WingPanel;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Everything about where a damage is, taken off one resolved point: the six facts every limit is
@@ -40,7 +44,9 @@ import java.util.Optional;
  * come from one resolved point or the call fails.
  *
  * <p>The joint the damage landed on is kept rather than discarded. It was resolved anyway to work
- * out the fastener size, and the rules that only apply in a fastener row need the joint itself.
+ * out the fastener size, and the rules that only apply in a fastener row need the joint itself. The
+ * nearest frame or stringer is kept for the same reason: a damage reaching over one may have reached
+ * the member under the skin as well.
  */
 public record Placement(
         PanelId part,
@@ -53,7 +59,8 @@ public record Placement(
         Length panelExtent,
         Offset centre,
         Optional<FastenerSize> nearestFastener,
-        Optional<Joint> joint) {
+        Optional<Joint> joint,
+        Optional<Margin> member) {
 
     /** A placement on metal that has a thickness, on a panel that has an extent. */
     public Placement {
@@ -68,6 +75,7 @@ public record Placement(
         Objects.requireNonNull(centre, "centre");
         Objects.requireNonNull(nearestFastener, "nearestFastener");
         Objects.requireNonNull(joint, "joint");
+        Objects.requireNonNull(member, "member");
         if (thickness.mils() <= 0) {
             throw new BadReading(part + ": the skin at the damage has no thickness");
         }
@@ -76,7 +84,7 @@ public record Placement(
         }
     }
 
-    /** A placement away from any fastener row. */
+    /** A placement away from any fastener row, with no barrel member resolved. */
     public Placement(
             PanelId part,
             PanelKind panelKind,
@@ -98,87 +106,105 @@ public record Placement(
                 panelExtent,
                 centre,
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
+    }
+
+    /**
+     * The same placement with one fact changed. Every {@code withX} method goes through here, so a
+     * fact added to the placement is added to the copy in one place.
+     */
+    private Placement with(Consumer<Draft> change) {
+        Draft draft = new Draft(this);
+        change.accept(draft);
+        return draft.build();
     }
 
     /** The same placement, near a fastener of a size. */
     public Placement withNearestFastener(FastenerSize size) {
-        return new Placement(
-                part,
-                panelKind,
-                chapter,
-                material,
-                region,
-                thickness,
-                edgeMargin,
-                panelExtent,
-                centre,
-                Optional.of(size),
-                joint);
+        return with(draft -> draft.nearestFastener = Optional.of(size));
     }
 
     /** The same placement, on a joint. */
     public Placement withJoint(Joint onto) {
-        return new Placement(
-                part,
-                panelKind,
-                chapter,
-                material,
-                region,
-                thickness,
-                edgeMargin,
-                panelExtent,
-                centre,
-                nearestFastener,
-                Optional.of(onto));
+        return with(draft -> draft.joint = Optional.of(onto));
     }
 
     /** The same placement in another region of the panel. */
     public Placement withRegion(Region where) {
-        return new Placement(
-                part,
-                panelKind,
-                chapter,
-                material,
-                where,
-                thickness,
-                edgeMargin,
-                panelExtent,
-                centre,
-                nearestFastener,
-                joint);
+        return with(draft -> draft.region = where);
     }
 
     /** The same placement on metal of another thickness. */
     public Placement withThickness(Length metal) {
-        return new Placement(
-                part,
-                panelKind,
-                chapter,
-                material,
-                region,
-                metal,
-                edgeMargin,
-                panelExtent,
-                centre,
-                nearestFastener,
-                joint);
+        return with(draft -> draft.thickness = metal);
     }
 
     /** The same placement at another distance from the nearest edge. */
     public Placement withEdgeMargin(Length margin) {
-        return new Placement(
-                part,
-                panelKind,
-                chapter,
-                material,
-                region,
-                thickness,
-                margin,
-                panelExtent,
-                centre,
-                nearestFastener,
-                joint);
+        return with(draft -> draft.edgeMargin = margin);
+    }
+
+    /** The same placement, this far off the nearest frame or stringer. */
+    public Placement withMember(Margin off) {
+        return with(draft -> draft.member = Optional.of(off));
+    }
+
+    /**
+     * Whether a damage centred here and reaching this far each way along and around crosses the
+     * nearest frame or stringer, which it does when half its extent across the member reaches it.
+     *
+     * <p>A frame runs round the barrel, so it is reached by how far the damage runs along the body. A
+     * stringer runs along the body, so it is reached by how far the damage runs round. Nothing is
+     * claimed where no member was resolved, which is the wing.
+     */
+    public boolean reachesTheMember(Length along, Length around) {
+        if (member.isEmpty()) {
+            return false;
+        }
+        Length across =
+                switch (member.get().member()) {
+                    case Frame frame -> along;
+                    case Stringer stringer -> around;
+                };
+        return across.isAtLeast(member.get().distance().times(2));
+    }
+
+    /** The facts of one placement while a copy of it is being changed, which the record cannot be. */
+    private static final class Draft {
+        private final Placement from;
+        private Region region;
+        private Length thickness;
+        private Length edgeMargin;
+        private Optional<FastenerSize> nearestFastener;
+        private Optional<Joint> joint;
+        private Optional<Margin> member;
+
+        private Draft(Placement from) {
+            this.from = from;
+            region = from.region;
+            thickness = from.thickness;
+            edgeMargin = from.edgeMargin;
+            nearestFastener = from.nearestFastener;
+            joint = from.joint;
+            member = from.member;
+        }
+
+        private Placement build() {
+            return new Placement(
+                    from.part,
+                    from.panelKind,
+                    from.chapter,
+                    from.material,
+                    region,
+                    thickness,
+                    edgeMargin,
+                    from.panelExtent,
+                    from.centre,
+                    nearestFastener,
+                    joint,
+                    member);
+        }
     }
 
     /** Resolve a card against the aeroplane it was raised on. */
@@ -231,7 +257,8 @@ public record Placement(
                 Length.max(along, around),
                 barrel.grid().absolute(point),
                 fastener,
-                joint);
+                joint,
+                Optional.of(resolved.margin()));
     }
 
     private static Placement wing(TailContext tail, WingPoint point) {

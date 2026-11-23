@@ -33,6 +33,24 @@ class PlacementTest {
     }
 
     @Test
+    void aCabinCardKeepsTheNearestMemberItWasMeasuredOff() {
+        Placement onTheLine = placed(6, "0.000");
+        assertThat(onTheLine.member()).isPresent();
+        assertThat(onTheLine.member().get().distance()).isEqualTo(new Length(0));
+        assertThat(onTheLine.reachesTheMember(inch("1.000"), inch("0.002"))).isTrue();
+        Placement offTheLine = placed(6, "2.000");
+        assertThat(offTheLine.reachesTheMember(inch("1.000"), inch("3.999"))).isFalse();
+        assertThat(offTheLine.reachesTheMember(inch("1.000"), inch("4.000"))).isTrue();
+    }
+
+    @Test
+    void aWingCardHasNoBarrelMemberToReach() {
+        Placement wing = Placement.place(Sample.tailContext(), Sample.card(Sample.lowerWingPoint()));
+        assertThat(wing.member()).isEmpty();
+        assertThat(wing.reachesTheMember(inch("40.000"), inch("40.000"))).isFalse();
+    }
+
+    @Test
     void theThicknessIsReadAtTheDamageAndNotOffTheDrawing() {
         Placement onTheLand = placed(10, "0.000");
         Placement inTheBay = placed(10, "4.000");

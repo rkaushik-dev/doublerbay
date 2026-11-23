@@ -91,7 +91,8 @@ class AssessJointsTest {
                 placement.panelExtent(),
                 placement.centre(),
                 size,
-                placement.joint());
+                placement.joint(),
+                placement.member());
     }
 
     private static Case caseOf(Geometry geometry, String margin, int dash, DamageKind kind, DamageOrigin origin) {

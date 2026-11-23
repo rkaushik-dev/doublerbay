@@ -38,6 +38,7 @@ public final class Rules {
             held -> Optional.of(allowedCheck(held)),
             Rules::smoothnessCheck,
             Rules::sharpnessCheck,
+            Rules::overTheMemberCheck,
             Rules::depthCheck,
             Rules::residualCheck,
             Rules::lengthCheck,
@@ -158,6 +159,27 @@ public final class Rules {
                 !dent.isSmooth(),
                 "smooth bottom and no crack",
                 "the dent is " + fault,
+                Disposition.REPAIRABLE);
+    }
+
+    /**
+     * A dent that reaches over a frame or a stringer has pushed on the member under the skin too.
+     *
+     * <p>The dent limits are written for skin between members, where the skin can move. Over a frame
+     * or a stringer the member took the blow as well and it may be cracked or kinked out of sight, so
+     * the dent is not left as it stands however shallow it reads.
+     */
+    public static Optional<Check> overTheMemberCheck(Case held) {
+        if (!(held.finding().geometry() instanceof Dent dent)
+                || held.placement().member().isEmpty()) {
+            return Optional.empty();
+        }
+        String member = held.placement().member().get().member().toString();
+        return flag(
+                "over a member",
+                held.placement().reachesTheMember(dent.along(), dent.around()),
+                "clear of " + member,
+                "reaches over " + member + ", which took the blow under the skin",
                 Disposition.REPAIRABLE);
     }
 

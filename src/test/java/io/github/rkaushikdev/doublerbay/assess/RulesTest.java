@@ -10,11 +10,16 @@ import io.github.rkaushikdev.doublerbay.damage.Dent;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.damage.LightningBurn;
 import io.github.rkaushikdev.doublerbay.damage.Scoring;
+import io.github.rkaushikdev.doublerbay.grid.Frame;
+import io.github.rkaushikdev.doublerbay.grid.JointMember;
+import io.github.rkaushikdev.doublerbay.grid.Side;
+import io.github.rkaushikdev.doublerbay.grid.Stringer;
 import io.github.rkaushikdev.doublerbay.manual.Cleanups;
 import io.github.rkaushikdev.doublerbay.manual.LimitSet;
 import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.measure.Ratio;
+import io.github.rkaushikdev.doublerbay.structure.Margin;
 import io.github.rkaushikdev.doublerbay.support.Sample;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -420,6 +425,52 @@ class RulesTest {
     @Test
     void theTipsRuleStandsAsideForAnythingButACrack() {
         assertThat(Rules.crackTipsCheck(caseOf(scratch()))).isEmpty();
+    }
+
+    private static Case dentOff(JointMember member, String distance) {
+        Finding finding = dent("0.020", "3.000", "2.000");
+        Placement placement =
+                Placement.place(Sample.tailContext(), finding).withMember(new Margin(member, inch(distance)));
+        return new Case(
+                finding,
+                placement,
+                LimitSet.allowable(),
+                Cleanups.standardRules().forKind(finding.kind()));
+    }
+
+    @Test
+    void aDentReachingOverAFrameIsNotLeftAsItStands() {
+        Check checked =
+                Rules.overTheMemberCheck(dentOff(new Frame(42), "1.500")).orElseThrow();
+        assertThat(checked.passed()).isFalse();
+        assertThat(checked.outcome()).isSameAs(Disposition.REPAIRABLE);
+        assertThat(checked.reason().detail()).isEqualTo("reaches over FR42, which took the blow under the skin");
+    }
+
+    @Test
+    void aFrameIsReachedAlongTheBodyAndAStringerRoundIt() {
+        assertThat(Rules.overTheMemberCheck(dentOff(new Frame(42), "1.501"))
+                        .orElseThrow()
+                        .passed())
+                .isTrue();
+        assertThat(Rules.overTheMemberCheck(dentOff(new Stringer(3, Side.LEFT), "1.500"))
+                        .orElseThrow()
+                        .passed())
+                .isTrue();
+        Check reached = Rules.overTheMemberCheck(dentOff(new Stringer(3, Side.LEFT), "1.000"))
+                .orElseThrow();
+        assertThat(reached.passed()).isFalse();
+        assertThat(reached.reason().detail()).startsWith("reaches over S-3L");
+    }
+
+    @Test
+    void theMemberRuleStandsAsideForAnythingButADentAndWhereNoMemberWasResolved() {
+        assertThat(Rules.overTheMemberCheck(caseOf(scratch()))).isEmpty();
+        Finding onTheWing = Sample.cardWith()
+                .geometry(new Dent(inch("0.020"), inch("3.000"), inch("2.000")))
+                .at(Sample.lowerWingPoint())
+                .build();
+        assertThat(Rules.overTheMemberCheck(caseOf(onTheWing))).isEmpty();
     }
 
     @Test

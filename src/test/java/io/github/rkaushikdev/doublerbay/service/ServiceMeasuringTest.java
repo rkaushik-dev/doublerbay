@@ -50,7 +50,7 @@ class ServiceMeasuringTest {
                     .raiseFinding(Sample.cardWith()
                             .sequence(sequence)
                             .geometry(dent("0.020"))
-                            .at(Sample.cabinPointOn(10))
+                            .at(Sample.cabinPointOn(10, "4.000"))
                             .build());
             unit.dispositions()
                     .save(DispositionRecord.raised(reference).movedTo(DispositionState.ASSESSED, DAY, "a.okonkwo"));
