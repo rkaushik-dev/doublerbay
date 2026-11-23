@@ -2,13 +2,19 @@ package io.github.rkaushikdev.doublerbay.api;
 
 import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.DoublerbayError;
+import io.github.rkaushikdev.doublerbay.assess.Placement;
 import io.github.rkaushikdev.doublerbay.damage.DamageKind;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
+import io.github.rkaushikdev.doublerbay.fleet.TailContext;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.ids.Serial;
 import io.github.rkaushikdev.doublerbay.report.Growth;
 import io.github.rkaushikdev.doublerbay.report.Step;
+import io.github.rkaushikdev.doublerbay.store.StoreContext;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
+import io.github.rkaushikdev.doublerbay.structure.PanelKind;
+import io.github.rkaushikdev.doublerbay.tolerance.GrowthBasis;
+import io.github.rkaushikdev.doublerbay.tolerance.Schedules;
 import io.github.rkaushikdev.doublerbay.util.Decimals;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,7 +60,7 @@ final class GrowthRoutes {
     @GetMapping("/growth/{reference}")
     @Operation(summary = "How fast one crack has actually grown.")
     GrowthOut cardGrowth(@PathVariable("reference") String reference) {
-        return deps.apply(unit -> growthOut(growthFor(unit, Dependencies.referenceFrom(reference))));
+        return deps.apply(unit -> growthOut(unit, growthFor(unit, Dependencies.referenceFrom(reference))));
     }
 
     @GetMapping("/growth")
@@ -72,24 +78,22 @@ final class GrowthRoutes {
                 }
                 Optional<BigDecimal> worst = built.worstRate();
                 if (worst.isPresent() && worst.get().compareTo(FAST) > 0) {
-                    rated.add(new Rated(built, worst.get()));
+                    rated.add(new Rated(growthOut(unit, built), worst.get()));
                 }
             }
             return new Tracked(tracked.size(), rated);
         });
         List<Rated> rated = new ArrayList<>(found.fast());
         rated.sort(Comparator.comparing(Rated::rate, Comparator.reverseOrder())
-                .thenComparing(one -> one.growth().reference().toString()));
+                .thenComparing(one -> one.growth().reference()));
         return new FleetGrowthOut(
-                on,
-                found.count(),
-                rated.stream().map(one -> growthOut(one.growth())).toList());
+                on, found.count(), rated.stream().map(Rated::growth).toList());
     }
 
     @GetMapping("/growth/aircraft/{serial}")
     @Operation(summary = "Every tracked crack on one aeroplane, fastest first.")
     List<GrowthOut> tailGrowth(@PathVariable("serial") String serial) {
-        List<Growth> built = deps.apply(unit -> {
+        return deps.apply(unit -> {
             Serial held = Dependencies.tailOn(unit, serial);
             List<Growth> cracks = new ArrayList<>();
             for (Finding one : unit.findings().onTail(held)) {
@@ -97,12 +101,10 @@ final class GrowthRoutes {
                     cracks.add(growthFor(unit, one.reference()));
                 }
             }
-            return cracks;
+            cracks.sort(Comparator.comparing(GrowthRoutes::sortingRate, Comparator.reverseOrder())
+                    .thenComparing(one -> one.reference().toString()));
+            return cracks.stream().map(one -> growthOut(unit, one)).toList();
         });
-        List<Growth> sorted = new ArrayList<>(built);
-        sorted.sort(Comparator.comparing(GrowthRoutes::sortingRate, Comparator.reverseOrder())
-                .thenComparing(one -> one.reference().toString()));
-        return sorted.stream().map(GrowthRoutes::growthOut).toList();
     }
 
     /**
@@ -135,9 +137,21 @@ final class GrowthRoutes {
                 step.isMeasurable() ? Optional.of(step.rateText()) : Optional.empty());
     }
 
-    /** One crack's growth as it goes back. */
-    static GrowthOut growthOut(Growth built) {
+    /**
+     * What the analysis says a crack grows in the skin under this card, read off where the card is
+     * on the day it was last measured, and nothing for a kind of skin with no growth data.
+     */
+    Optional<GrowthBasis> basisUnder(UnitOfWork unit, FindingId reference) {
+        Finding latest = unit.findings().latest(reference);
+        TailContext tail = StoreContext.contextFor(unit, deps.catalogue(), latest.serial(), latest.foundOn());
+        PanelKind kind = Placement.place(tail, latest).panelKind();
+        return Optional.ofNullable(Schedules.BASIS.get(kind));
+    }
+
+    /** One crack's growth as it goes back, held against the analysis for the skin it is in. */
+    GrowthOut growthOut(UnitOfWork unit, Growth built) {
         Optional<BigDecimal> worst = built.worstRate();
+        Optional<GrowthBasis> basis = basisUnder(unit, built.reference());
         return new GrowthOut(
                 built.reference().toString(),
                 built.readings(),
@@ -146,6 +160,8 @@ final class GrowthRoutes {
                 built.isATrend(),
                 built.worstRateText(),
                 worst.isPresent() && worst.get().compareTo(FAST) > 0,
+                basis.map(GrowthBasis::toString),
+                basis.filter(built::outgrows).isPresent(),
                 built.steps().stream().map(GrowthRoutes::stepOut).toList());
     }
 
@@ -154,8 +170,8 @@ final class GrowthRoutes {
         return built.worstRate().filter(rate -> rate.signum() != 0).orElse(NO_RATE);
     }
 
-    /** A crack and its worst rate, kept together while the list is sorted. */
-    private record Rated(Growth growth, BigDecimal rate) {}
+    /** A crack as it goes back and its worst rate, kept together while the list is sorted. */
+    private record Rated(GrowthOut growth, BigDecimal rate) {}
 
     /** How many cracks the fleet carries, and the fast ones among them. */
     private record Tracked(int count, List<Rated> fast) {}

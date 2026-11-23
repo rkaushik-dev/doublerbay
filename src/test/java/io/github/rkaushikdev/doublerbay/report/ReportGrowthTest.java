@@ -10,7 +10,10 @@ import io.github.rkaushikdev.doublerbay.damage.DamageOrigin;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.structure.PanelKind;
 import io.github.rkaushikdev.doublerbay.support.Sample;
+import io.github.rkaushikdev.doublerbay.tolerance.GrowthBasis;
+import io.github.rkaushikdev.doublerbay.tolerance.Schedules;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -189,5 +192,19 @@ class ReportGrowthTest {
     @Test
     void aGrowthWithNoStepsTotalsNothing() {
         assertThat(new Growth(Sample.card(1).reference(), 1, List.of()).total()).isEqualTo(new Length(0));
+    }
+
+    @Test
+    void aCrackOutgrowsTheAnalysisOnlyWhenItsWorstStretchIsQuicker() {
+        GrowthBasis pressurised = Schedules.basisFor(PanelKind.PRESSURISED_SKIN);
+        assertThat(pressurised.inchesPerThousand()).isEqualByComparingTo("0.100");
+        Growth quick = Growth.of(List.of(card("0.400", 13800, 1), card("0.550", 14800, 2)));
+        Growth steady = Growth.of(List.of(card("0.400", 13800, 1), card("0.500", 14800, 2)));
+        assertThat(quick.outgrows(pressurised)).isTrue();
+        assertThat(steady.outgrows(pressurised)).isFalse();
+        assertThat(steady.outgrows(Schedules.basisFor(PanelKind.UNPRESSURISED_SKIN)))
+                .isTrue();
+        Growth once = Growth.of(List.of(card("0.400", 13800, 1)));
+        assertThat(once.outgrows(pressurised)).isFalse();
     }
 }

@@ -277,4 +277,46 @@ class GrowthRoutesTest {
                 built.api().get("/growth/" + raiseCrack(built.database()), Map.of(), Desk.headersFor("reader"));
         assertThat(answer.status()).isEqualTo(200);
     }
+
+    @Test
+    void aCrackIsHeldAgainstTheAnalysisForTheSkinItIsIn() {
+        Built built = built();
+        String reference = raiseCrack(built.database());
+        measure(built.api(), reference, "0.475", 14800);
+        JsonNode body = built.api().get("/growth/" + reference).json();
+        assertThat(body.get("basis").asText()).isEqualTo("critical 6.000, 0.100 per 1000 FC");
+        assertThat(body.get("fast").asBoolean()).isTrue();
+        assertThat(body.get("outgrows_the_basis").asBoolean()).isFalse();
+    }
+
+    @Test
+    void aCrackGrowingFasterThanTheAnalysisSaysOutgrowsIt() {
+        Built built = built();
+        String reference = raiseCrack(built.database());
+        measure(built.api(), reference, "0.900", 14800);
+        assertThat(built.api()
+                        .get("/growth/" + reference)
+                        .json()
+                        .get("outgrows_the_basis")
+                        .asBoolean())
+                .isTrue();
+        JsonNode fleet = built.api().get("/growth?on=2025-06-01").json();
+        assertThat(fleet.get("fast").get(0).get("outgrows_the_basis").asBoolean())
+                .isTrue();
+        assertThat(built.api()
+                        .get("/growth/aircraft/5127")
+                        .json()
+                        .get(0)
+                        .get("basis")
+                        .asText())
+                .startsWith("critical 6.000");
+    }
+
+    @Test
+    void aCrackWithOneReadingHasShownNothingAgainstTheAnalysis() {
+        Built built = built();
+        JsonNode body =
+                built.api().get("/growth/" + raiseCrack(built.database())).json();
+        assertThat(body.get("outgrows_the_basis").asBoolean()).isFalse();
+    }
 }

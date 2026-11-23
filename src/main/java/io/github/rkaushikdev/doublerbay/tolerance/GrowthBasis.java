@@ -25,6 +25,11 @@ public record GrowthBasis(Length critical, Length growthPerThousand) {
         }
     }
 
+    /** What the analysis says a crack here grows, in inches per thousand cycles. */
+    public BigDecimal inchesPerThousand() {
+        return growthPerThousand.inches();
+    }
+
     /**
      * Flying between a crack being findable and being critical.
      *

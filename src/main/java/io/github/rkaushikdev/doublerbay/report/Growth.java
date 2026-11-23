@@ -5,6 +5,7 @@ import io.github.rkaushikdev.doublerbay.damage.Crack;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.tolerance.GrowthBasis;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -105,6 +106,17 @@ public record Growth(FindingId reference, int readings, List<Step> steps) {
     /** The steps long enough to take a rate from. */
     public List<Step> measurable() {
         return steps.stream().filter(Step::isMeasurable).toList();
+    }
+
+    /**
+     * Whether the fastest measured stretch is quicker than the analysis says a crack grows in this
+     * kind of structure, which is the point at which the repeat interval was set on the wrong number.
+     * A crack with no measurable stretch has not shown anything yet.
+     */
+    public boolean outgrows(GrowthBasis basis) {
+        return worstRate()
+                .filter(rate -> rate.compareTo(basis.inchesPerThousand()) > 0)
+                .isPresent();
     }
 
     /** The fastest measured stretch, which is the one to plan against, or nothing with no measurable step. */
