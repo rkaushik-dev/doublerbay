@@ -207,4 +207,19 @@ class ReportGrowthTest {
         Growth once = Growth.of(List.of(card("0.400", 13800, 1)));
         assertThat(once.outgrows(pressurised)).isFalse();
     }
+
+    @Test
+    void theDiameterAStopDrillAddsIsNotGrowth() {
+        Finding raised = card("0.400", 13800, 1);
+        Finding drilled = raised.stopDrilled(Sample.inch("0.098"), raised.foundOn(), Sample.flown(13900, 27800));
+        Finding later = drilled.reMeasured(
+                new Crack(Sample.inch("0.548"), new Angle(0), true, true, 2),
+                raised.foundOn(),
+                Sample.flown(14900, 29800));
+        Growth growth = Growth.of(List.of(raised, drilled, later));
+        assertThat(growth.steps()).hasSize(2);
+        assertThat(growth.steps().get(0).grewBy()).isEqualTo(new Length(0));
+        assertThat(growth.steps().get(1).grewBy()).isEqualTo(Sample.inch("0.050"));
+        assertThat(growth.total()).isEqualTo(Sample.inch("0.050"));
+    }
 }

@@ -5,7 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.NotOnFile;
+import io.github.rkaushikdev.doublerbay.Refused;
 import io.github.rkaushikdev.doublerbay.assess.Disposition;
+import io.github.rkaushikdev.doublerbay.damage.Crack;
+import io.github.rkaushikdev.doublerbay.damage.DamageKind;
+import io.github.rkaushikdev.doublerbay.damage.DamageOrigin;
 import io.github.rkaushikdev.doublerbay.damage.Dent;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.damage.Geometry;
@@ -15,7 +19,9 @@ import io.github.rkaushikdev.doublerbay.disposition.DispositionState;
 import io.github.rkaushikdev.doublerbay.fleet.TypeCatalogue;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.manual.Book;
+import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.Interval;
+import io.github.rkaushikdev.doublerbay.repair.StopDrills;
 import io.github.rkaushikdev.doublerbay.store.Database;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import io.github.rkaushikdev.doublerbay.support.Desk;
@@ -266,5 +272,48 @@ class ServiceMeasuringTest {
         ReMeasured made = new ReMeasured(Sample.card(1), Disposition.ALLOWABLE, Disposition.REPAIRABLE, false);
         assertThat(made.gotWorse()).isTrue();
         assertThat(made.outgrewItsDeferral()).isFalse();
+    }
+
+    private FindingId raisedCrack() {
+        FindingId reference = new FindingId(2025, 4);
+        UnitOfWork.run(database, unit -> unit.findings()
+                .raiseFinding(Sample.cardWith()
+                        .sequence(4)
+                        .kind(DamageKind.CRACK)
+                        .geometry(new Crack(Sample.inch("0.500"), Angle.ofDegrees(90)))
+                        .at(Sample.cabinPointOn(10, "4.000"))
+                        .origin(DamageOrigin.FATIGUE)
+                        .build()));
+        return reference;
+    }
+
+    private ReMeasured drilled(FindingId reference) {
+        return UnitOfWork.apply(
+                database, unit -> Measuring.stopDrill(unit, Book.v320(), new TypeCatalogue(), reference, AGAIN, null));
+    }
+
+    @Test
+    void stopDrillingACrackRecordsTheDrilledCrackAsTheNextRevision() {
+        FindingId reference = raisedCrack();
+        ReMeasured answer = drilled(reference);
+        assertThat(answer.revision()).isEqualTo(2);
+        Finding latest = UnitOfWork.apply(database, unit -> unit.findings().latest(reference));
+        assertThat(latest.geometry()).isInstanceOfSatisfying(Crack.class, crack -> {
+            assertThat(crack.isArrested()).isTrue();
+            assertThat(crack.length()).isEqualTo(Sample.inch("0.500").plus(StopDrills.drillFor(Sample.inch("0.040"))));
+        });
+        assertThat(latest.note()).startsWith("stop drilled 0.098");
+        assertThat(latest.foundOn()).isEqualTo(AGAIN);
+    }
+
+    @Test
+    void aCrackIsDrilledOnceAndADentNotAtAll() {
+        FindingId reference = raisedCrack();
+        drilled(reference);
+        assertThatThrownBy(() -> drilled(reference))
+                .isInstanceOf(Refused.class)
+                .hasMessageContaining("already drilled");
+        raised();
+        assertThatThrownBy(() -> drilled(AGAINST)).isInstanceOf(Refused.class).hasMessageContaining("not a crack");
     }
 }

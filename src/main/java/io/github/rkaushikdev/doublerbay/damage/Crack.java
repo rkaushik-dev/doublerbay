@@ -75,6 +75,25 @@ public record Crack(Length length, Angle bearing, boolean throughThickness, bool
         return length.minus(earlier.length);
     }
 
+    /**
+     * The crack once both tips are stop drilled with a drill of this size. The holes are centred on
+     * the tips, so the crack now runs half a diameter past each one and is a diameter longer.
+     *
+     * @throws BadReading when a tip was not found or the tips were drilled already
+     */
+    public Crack drilled(Length diameter) {
+        if (!isBounded()) {
+            throw new BadReading("a crack is drilled at two tips somebody found");
+        }
+        if (stopDrilled) {
+            throw new BadReading("the tips of this crack were drilled before");
+        }
+        if (diameter.mils() <= 0) {
+            throw new BadReading("a stop drill has a size");
+        }
+        return new Crack(length.plus(diameter), bearing, throughThickness, true, tipsFound);
+    }
+
     /** A thin box along the crack, for working out what it is heading towards. */
     @Override
     public Footprint footprint(Offset centre) {

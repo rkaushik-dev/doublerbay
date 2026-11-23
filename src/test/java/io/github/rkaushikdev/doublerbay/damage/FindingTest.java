@@ -210,4 +210,55 @@ class FindingTest {
                 .isInstanceOf(BadReading.class)
                 .hasMessageContaining("not re measured as something else");
     }
+
+    @Test
+    void aStopDrilledCrackIsTheNextRevisionOneDiameterLonger() {
+        Finding raised = finding(DamageKind.CRACK, crack(), DamageOrigin.FATIGUE);
+        Finding drilled = raised.stopDrilled(inch("0.098"), FOUND.plusDays(2), usage(13905, 24410));
+        assertThat(drilled.revision()).isEqualTo(2);
+        assertThat(drilled.foundOn()).isEqualTo(FOUND.plusDays(2));
+        assertThat(drilled.geometry()).isEqualTo(new Crack(inch("0.848"), Angle.ofDegrees(0), true, true, 2));
+        assertThat(drilled.note()).isEqualTo("stop drilled 0.098 at both tips");
+        assertThat(raised.revision()).isEqualTo(1);
+        assertThat(raised.note()).isEmpty();
+    }
+
+    @Test
+    void theDrillingGoesOnAfterWhateverTheCardAlreadySaid() {
+        Finding noted = finding(DamageKind.CRACK, crack(), DamageOrigin.FATIGUE).withNote("found on the walk round");
+        assertThat(noted.stopDrilled(inch("0.128"), FOUND, usage(13900, 24400)).note())
+                .isEqualTo("found on the walk round; stop drilled 0.128 at both tips");
+    }
+
+    @Test
+    void onlyACrackIsStopDrilledAndOnlyOnce() {
+        assertThatThrownBy(() -> finding(DamageKind.DENT, dent(), DamageOrigin.IMPACT)
+                        .stopDrilled(inch("0.098"), FOUND, usage(13900, 24400)))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("only a crack is stop drilled");
+        Finding drilled = finding(DamageKind.CRACK, crack(), DamageOrigin.FATIGUE)
+                .stopDrilled(inch("0.098"), FOUND, usage(13900, 24400));
+        assertThatThrownBy(() -> drilled.stopDrilled(inch("0.098"), FOUND, usage(13900, 24400)))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("drilled before");
+        Crack open = new Crack(inch("0.750"), Angle.ofDegrees(0), true, false, 1);
+        assertThatThrownBy(() -> open.drilled(inch("0.098")))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("two tips somebody found");
+        assertThatThrownBy(() -> crack().drilled(new Length(0)))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("has a size");
+    }
+
+    @Test
+    void theCopiesOfACardChangeOnlyWhatTheyAreAskedTo() {
+        Finding raised = finding(DamageKind.CRACK, crack(), DamageOrigin.FATIGUE);
+        Finding moved = raised.withRevision(4).withAtUsage(usage(14000, 24600)).withNote("re read");
+        assertThat(moved.revision()).isEqualTo(4);
+        assertThat(moved.atUsage()).isEqualTo(usage(14000, 24600));
+        assertThat(moved.note()).isEqualTo("re read");
+        assertThat(moved.geometry()).isEqualTo(raised.geometry());
+        assertThat(moved.reference()).isEqualTo(raised.reference());
+        assertThat(moved.isOpen()).isTrue();
+    }
 }

@@ -17,6 +17,7 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * The damage report itself, which is the card the whole desk works off.
@@ -176,8 +177,26 @@ public record Finding(
         if (on.isBefore(foundOn)) {
             throw new BadReading("a re measurement does not happen before the finding");
         }
-        return new Finding(
-                reference, serial, kind, measured, point, on, source, origin, at, revision + 1, supersededBy, note);
+        return with(draft -> {
+            draft.geometry = measured;
+            draft.foundOn = on;
+            draft.atUsage = at;
+            draft.revision = revision + 1;
+        });
+    }
+
+    /**
+     * The crack after both its tips were stop drilled with a drill of this size, which is a new
+     * revision measured one diameter longer, with the drilling written on the card.
+     *
+     * @throws BadReading for a card that is not a crack, or a crack that cannot be drilled
+     */
+    public Finding stopDrilled(Length diameter, LocalDate on, Usage at) {
+        if (!(geometry instanceof Crack crack)) {
+            throw new BadReading("only a crack is stop drilled, and " + reference + " is a " + kind);
+        }
+        String drilled = "stop drilled " + diameter.inches().toPlainString() + " at both tips";
+        return reMeasured(crack.drilled(diameter), on, at).withNote(note.isEmpty() ? drilled : note + "; " + drilled);
     }
 
     /** Closed out because another record now describes this damage. */
@@ -190,70 +209,69 @@ public record Finding(
 
     /** The same card at another revision number. */
     public Finding withRevision(int replaced) {
-        return new Finding(
-                reference,
-                serial,
-                kind,
-                geometry,
-                point,
-                foundOn,
-                source,
-                origin,
-                atUsage,
-                replaced,
-                supersededBy,
-                note);
+        return with(draft -> draft.revision = replaced);
     }
 
     /** The same card with the counters read at another time. */
     public Finding withAtUsage(Usage replaced) {
-        return new Finding(
-                reference,
-                serial,
-                kind,
-                geometry,
-                point,
-                foundOn,
-                source,
-                origin,
-                replaced,
-                revision,
-                supersededBy,
-                note);
+        return with(draft -> draft.atUsage = replaced);
     }
 
     /** The same card, closed by another one, with no check on what closed it. */
     public Finding withSupersededBy(FindingId by) {
-        return new Finding(
-                reference,
-                serial,
-                kind,
-                geometry,
-                point,
-                foundOn,
-                source,
-                origin,
-                atUsage,
-                revision,
-                Optional.of(by),
-                note);
+        return with(draft -> draft.supersededBy = Optional.of(by));
     }
 
     /** The same card with another note on it. */
     public Finding withNote(String replaced) {
-        return new Finding(
-                reference,
-                serial,
-                kind,
-                geometry,
-                point,
-                foundOn,
-                source,
-                origin,
-                atUsage,
-                revision,
-                supersededBy,
-                replaced);
+        return with(draft -> draft.note = replaced);
+    }
+
+    /**
+     * The same card with something changed. Every copy goes through here, so the card is checked in
+     * full on the way out whatever was changed.
+     */
+    private Finding with(Consumer<Draft> change) {
+        Draft draft = new Draft(this);
+        change.accept(draft);
+        return draft.build();
+    }
+
+    /** The parts of a card a new revision or a close out can change, while they are being changed. */
+    private static final class Draft {
+        private final Finding from;
+        private Geometry geometry;
+        private LocalDate foundOn;
+        private Usage atUsage;
+        private int revision;
+        private Optional<FindingId> supersededBy;
+        private String note;
+
+        private Draft(Finding from) {
+            this.from = from;
+            geometry = from.geometry;
+            foundOn = from.foundOn;
+            atUsage = from.atUsage;
+            revision = from.revision;
+            supersededBy = from.supersededBy;
+            note = from.note;
+        }
+
+        private Finding build() {
+            return new Finding(
+                    from.reference,
+                    from.serial,
+                    from.kind,
+                    geometry,
+                    from.point,
+                    foundOn,
+                    from.source,
+                    from.origin,
+                    atUsage,
+                    revision,
+                    supersededBy,
+                    note);
+        }
     }
 
     /** {@code DR-2025-004182 MSN 5127 dent at FR41 ...}, with {@code rev 2} after the first revision. */

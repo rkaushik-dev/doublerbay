@@ -75,13 +75,24 @@ public record Growth(FindingId reference, int readings, List<Step> steps) {
         for (int index = 1; index < ordered.size(); index++) {
             Finding before = ordered.get(index - 1);
             Finding after = ordered.get(index);
-            Length was = measuredLength(before);
             Length now = measuredLength(after);
+            Length was = drilledBetween(before, after) ? now : measuredLength(before);
             int cycles =
                     after.atUsage().cycles().count() - before.atUsage().cycles().count();
             steps.add(new Step(was, now, cycles));
         }
         return new Growth(ordered.get(0).reference(), ordered.size(), steps);
+    }
+
+    /**
+     * Whether the tips were stop drilled between two readings. The later one is a diameter longer
+     * because of the drill and not because the crack grew, so that stretch counts no growth.
+     */
+    private static boolean drilledBetween(Finding before, Finding after) {
+        return after.geometry() instanceof Crack later
+                && later.stopDrilled()
+                && before.geometry() instanceof Crack earlier
+                && !earlier.stopDrilled();
     }
 
     /** Three readings is a trend. Two is a line through two points. */

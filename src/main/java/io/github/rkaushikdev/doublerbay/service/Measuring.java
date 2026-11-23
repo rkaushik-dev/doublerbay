@@ -2,8 +2,11 @@ package io.github.rkaushikdev.doublerbay.service;
 
 import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.DoublerbayError;
+import io.github.rkaushikdev.doublerbay.Refused;
 import io.github.rkaushikdev.doublerbay.assess.Assessor;
 import io.github.rkaushikdev.doublerbay.assess.Disposition;
+import io.github.rkaushikdev.doublerbay.assess.Placement;
+import io.github.rkaushikdev.doublerbay.damage.Crack;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.damage.Geometry;
 import io.github.rkaushikdev.doublerbay.fleet.TailContext;
@@ -11,10 +14,13 @@ import io.github.rkaushikdev.doublerbay.fleet.TypeCatalogue;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.manual.Book;
 import io.github.rkaushikdev.doublerbay.measure.Usage;
+import io.github.rkaushikdev.doublerbay.repair.StopDrill;
+import io.github.rkaushikdev.doublerbay.repair.StopDrills;
 import io.github.rkaushikdev.doublerbay.store.StoreContext;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Measuring a damage again, and what the new numbers oblige the desk to do.
@@ -60,15 +66,53 @@ public final class Measuring {
                     + current.supersededBy().get() + " instead");
         }
 
+        return recorded(unit, book, catalogue, current, at -> current.reMeasured(geometry, on, at), on, flownOrNull);
+    }
+
+    /**
+     * Stop drill both tips of a crack on a day, and record the drilled crack as the card's next
+     * revision with the drilling written on it.
+     *
+     * <p>The drill comes off the skin gauge at the crack and has to keep its edge distance, both read
+     * off where the card is on the aeroplane. A null reading is the one the tail's log gives for the
+     * day.
+     *
+     * @throws Refused when a tip was not found, the tips were drilled already, or the holes would come
+     *     inside their edge distance
+     */
+    public static ReMeasured stopDrill(
+            UnitOfWork unit, Book book, TypeCatalogue catalogue, FindingId reference, LocalDate on, Usage flownOrNull) {
+        Finding current = unit.findings().latest(reference);
+        if (!(current.geometry() instanceof Crack crack)) {
+            throw new Refused("not a crack", reference + " is a " + current.kind());
+        }
+        Placement placement = Placement.place(StoreContext.contextFor(unit, catalogue, current.serial(), on), current);
+        StopDrill drill = StopDrills.drill(crack, placement.thickness(), placement.edgeMargin());
+        return recorded(
+                unit, book, catalogue, current, at -> current.stopDrilled(drill.diameter(), on, at), on, flownOrNull);
+    }
+
+    /**
+     * Write the next revision of a card, made at the reading for the day, and say how its disposition
+     * moved from what it was assessed as when it was found.
+     */
+    private static ReMeasured recorded(
+            UnitOfWork unit,
+            Book book,
+            TypeCatalogue catalogue,
+            Finding current,
+            Function<Usage, Finding> next,
+            LocalDate on,
+            Usage flownOrNull) {
         Disposition before = disposition(unit, book, catalogue, current, current.foundOn());
         Usage at = flownOrNull != null
                 ? flownOrNull
                 : unit.aircraft().logFor(current.serial()).at(on);
-        Finding updated = current.reMeasured(geometry, on, at);
+        Finding updated = next.apply(at);
         unit.findings().recordRevision(updated);
         Disposition after = disposition(unit, book, catalogue, updated, on);
         unit.flush();
-        return new ReMeasured(updated, before, after, isDeferred(unit, reference));
+        return new ReMeasured(updated, before, after, isDeferred(unit, current.reference()));
     }
 
     private static boolean isDeferred(UnitOfWork unit, FindingId reference) {
