@@ -390,6 +390,38 @@ class RulesTest {
         assertThat(Rules.strikeCheck(caseOf(dent()))).isEmpty();
     }
 
+    private static Finding crackWithTips(int tips) {
+        return Sample.cardWith()
+                .kind(DamageKind.CRACK)
+                .geometry(new Crack(inch("0.600"), Angle.ofDegrees(90), true, false, tips))
+                .at(Sample.cabinPointOn(10, "4.000"))
+                .origin(DamageOrigin.FATIGUE)
+                .build();
+    }
+
+    @Test
+    void aCrackWithBothTipsFoundGetsPastTheTipsRule() {
+        Check checked = Rules.crackTipsCheck(caseOf(crackWithTips(2))).orElseThrow();
+        assertThat(checked.passed()).isTrue();
+        assertThat(checked.reason().detail()).isEqualTo("both tips found");
+    }
+
+    @Test
+    void aCrackWithATipNobodyFoundGoesToTheManufacturer() {
+        for (int tips : new int[] {0, 1}) {
+            Check checked = Rules.crackTipsCheck(caseOf(crackWithTips(tips))).orElseThrow();
+            assertThat(checked.passed()).isFalse();
+            assertThat(checked.outcome()).isSameAs(Disposition.OUT_OF_LIMITS);
+            assertThat(checked.reason().detail())
+                    .isEqualTo("only " + tips + " of 2 tips found, so 0.600 is a lower bound");
+        }
+    }
+
+    @Test
+    void theTipsRuleStandsAsideForAnythingButACrack() {
+        assertThat(Rules.crackTipsCheck(caseOf(scratch()))).isEmpty();
+    }
+
     @Test
     void everyCheckTakesACaseAndAnswersOrStandsAside() {
         Case walked = caseOf(dent(), LimitSet.allowable().withMaxDepth(inch("0.060")));

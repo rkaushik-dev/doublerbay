@@ -41,6 +41,7 @@ public final class Rules {
             Rules::depthCheck,
             Rules::residualCheck,
             Rules::lengthCheck,
+            Rules::crackTipsCheck,
             Rules::areaCheck,
             Rules::exfoliationCheck,
             Rules::strikeCheck,
@@ -163,19 +164,39 @@ public final class Rules {
     /** Length against the cap, for the kinds that lie along a line. */
     public static Optional<Check> lengthCheck(Case held) {
         Optional<Length> cap = held.limits().maxLength();
-        if (cap.isEmpty()) {
+        Optional<Length> length = lineLength(held.finding().geometry());
+        if (cap.isEmpty() || length.isEmpty()) {
             return Optional.empty();
         }
-        Length length;
-        switch (held.finding().geometry()) {
-            case Scoring scoring -> length = scoring.length();
-            case Crack crack -> length = crack.length();
-            default -> {
-                return Optional.empty();
-            }
+        String detail = inches(length.get()) + " long against a cap of " + inches(cap.get());
+        return answer(length.get().isAtMost(cap.get()), "length", detail, Disposition.REPAIRABLE);
+    }
+
+    private static Optional<Length> lineLength(Geometry geometry) {
+        return switch (geometry) {
+            case Scoring scoring -> Optional.of(scoring.length());
+            case Crack crack -> Optional.of(crack.length());
+            default -> Optional.empty();
+        };
+    }
+
+    /**
+     * Whether both ends of a crack were found, which is what a repair is drawn to.
+     *
+     * <p>A crack with a tip nobody found has a length that is only a lower bound. It cannot be stop
+     * drilled at the end that was not found and no doubler can be sized to cover a crack of unknown
+     * length, so it goes to the manufacturer rather than to the repair section.
+     */
+    public static Optional<Check> crackTipsCheck(Case held) {
+        if (!(held.finding().geometry() instanceof Crack crack)) {
+            return Optional.empty();
         }
-        String detail = inches(length) + " long against a cap of " + inches(cap.get());
-        return answer(length.isAtMost(cap.get()), "length", detail, Disposition.REPAIRABLE);
+        return flag(
+                "crack tips",
+                !crack.isBounded(),
+                "both tips found",
+                "only " + crack.tipsFound() + " of 2 tips found, so " + inches(crack.length()) + " is a lower bound",
+                Disposition.OUT_OF_LIMITS);
     }
 
     /** Area against the cap, for the kinds measured as a patch. */
