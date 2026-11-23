@@ -79,20 +79,32 @@ public final class Rules {
                 Disposition.REPAIRABLE);
     }
 
-    /** Depth against the cap, with rework on the table only where grinding is allowed. */
+    /**
+     * Depth against the cap, with rework on the table only where grinding is allowed.
+     *
+     * <p>A score lying along the body on a page that states a hoop loaded share is held to that share of
+     * the cap, and the trail says so, because the same depth running round the barrel would have passed.
+     */
     public static Optional<Check> depthCheck(Case held) {
         Optional<Length> depth = held.depth();
-        Optional<Length> cap = held.limits().depthCap(held.thickness());
+        boolean hoopLoaded = isHoopLoaded(held);
+        Optional<Length> cap = held.limits().depthCap(held.thickness(), hoopLoaded);
         if (depth.isEmpty() || cap.isEmpty()) {
             return Optional.empty();
         }
-        String detail =
-                inches(depth.get()) + " deep against a cap of " + inches(cap.get()) + " at " + inches(held.thickness());
+        String along = hoopLoaded && held.limits().hoopLoadedShare().isPresent() ? " along the body" : "";
+        String detail = inches(depth.get()) + " deep against a cap of " + inches(cap.get()) + along + " at "
+                + inches(held.thickness());
         if (depth.get().isAtMost(cap.get())) {
             return answer(true, "depth", detail, Disposition.REPAIRABLE);
         }
         Disposition landing = held.canBeBlendedHere() ? Disposition.REWORKABLE : Disposition.REPAIRABLE;
         return answer(false, "depth", detail, landing);
+    }
+
+    /** A score lying along the body, which hoop stress pulls open. */
+    static boolean isHoopLoaded(Case held) {
+        return held.finding().geometry() instanceof Scoring scoring && scoring.isHoopLoaded();
     }
 
     /**

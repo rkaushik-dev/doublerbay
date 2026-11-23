@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * One page's worth of limits, resolved against a thickness when it is read.
@@ -35,6 +36,7 @@ public record LimitSet(
         boolean allowed,
         Optional<Length> maxDepth,
         Optional<Ratio> maxDepthFraction,
+        Optional<Ratio> hoopLoadedShare,
         Optional<Length> maxLength,
         Optional<BigDecimal> maxArea,
         Optional<Ratio> maxSharpness,
@@ -48,6 +50,7 @@ public record LimitSet(
     public LimitSet {
         Objects.requireNonNull(maxDepth, "maxDepth");
         Objects.requireNonNull(maxDepthFraction, "maxDepthFraction");
+        Objects.requireNonNull(hoopLoadedShare, "hoopLoadedShare");
         Objects.requireNonNull(maxLength, "maxLength");
         Objects.requireNonNull(maxArea, "maxArea");
         Objects.requireNonNull(maxSharpness, "maxSharpness");
@@ -67,6 +70,14 @@ public record LimitSet(
                         minResidualFraction)) {
             throw new BadReading("a limit set that allows nothing does not carry limits");
         }
+        if (hoopLoadedShare.isPresent()
+                && (hoopLoadedShare.get().value().signum() <= 0
+                        || hoopLoadedShare.get().value().compareTo(BigDecimal.ONE) > 0)) {
+            throw new BadReading("a hoop loaded share is a part of the depth cap");
+        }
+        if (hoopLoadedShare.isPresent() && maxDepth.isEmpty() && maxDepthFraction.isEmpty()) {
+            throw new BadReading("a hoop loaded share needs a depth cap to be a share of");
+        }
         if (maxArea.isPresent() && maxArea.get().signum() <= 0) {
             throw new BadReading("an area limit is an area");
         }
@@ -77,34 +88,12 @@ public record LimitSet(
 
     /** A page that allows the damage and, until a limit is added, caps nothing. */
     public static LimitSet allowable() {
-        return new LimitSet(
-                true,
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
+        return new Draft(true).build();
     }
 
     /** A page that says this damage is never acceptable as it stands. */
     public static LimitSet nothingAllowable() {
-        return new LimitSet(
-                false,
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
+        return new Draft(false).build();
     }
 
     private static boolean anyPresent(Optional<?>... values) {
@@ -121,164 +110,120 @@ public record LimitSet(
                 maxDepth, maxDepthFraction, maxLength, maxArea, maxSharpness, minResidual, minResidualFraction);
     }
 
+    /**
+     * The same limits with one of them changed. Every {@code withX} method goes through here, so a
+     * limit added to the page is added to the copy in one place.
+     */
+    private LimitSet with(Consumer<Draft> change) {
+        Draft draft = new Draft(this);
+        change.accept(draft);
+        return draft.build();
+    }
+
     /** The same limits with an absolute depth cap. */
     public LimitSet withMaxDepth(Length depth) {
-        return new LimitSet(
-                allowed,
-                Optional.of(depth),
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.maxDepth = Optional.of(depth));
     }
 
     /** The same limits with a depth cap written as a share of the thickness at the damage. */
     public LimitSet withMaxDepthFraction(Ratio fraction) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                Optional.of(fraction),
-                maxLength,
-                maxArea,
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.maxDepthFraction = Optional.of(fraction));
+    }
+
+    /** The same limits with a share of the depth cap a score lying along the body may use. */
+    public LimitSet withHoopLoadedShare(Ratio share) {
+        return with(draft -> draft.hoopLoadedShare = Optional.of(share));
     }
 
     /** The same limits with a length cap. */
     public LimitSet withMaxLength(Length length) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                Optional.of(length),
-                maxArea,
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.maxLength = Optional.of(length));
     }
 
     /** The same limits with an area cap, in square inches. */
     public LimitSet withMaxArea(BigDecimal area) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                Optional.of(area),
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.maxArea = Optional.of(area));
     }
 
     /** The same limits with a cap on how sharp a dent may be. */
     public LimitSet withMaxSharpness(Ratio sharpness) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                Optional.of(sharpness),
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.maxSharpness = Optional.of(sharpness));
     }
 
     /** The same limits with an absolute floor on the metal left. */
     public LimitSet withMinResidual(Length residual) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                maxSharpness,
-                Optional.of(residual),
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.minResidual = Optional.of(residual));
     }
 
     /** The same limits with a floor on the metal left, as a share of the thickness. */
     public LimitSet withMinResidualFraction(Ratio fraction) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                maxSharpness,
-                minResidual,
-                Optional.of(fraction),
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.minResidualFraction = Optional.of(fraction));
     }
 
     /** The same limits with an edge margin in inches. */
     public LimitSet withMinEdgeMargin(Length margin) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                Optional.of(margin),
-                minEdgeMarginDiameters,
-                blendTaper);
+        return with(draft -> draft.minEdgeMargin = Optional.of(margin));
     }
 
     /** The same limits with an edge margin in diameters of the nearest fastener. */
     public LimitSet withMinEdgeMarginDiameters(BigDecimal diameters) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                Optional.of(diameters),
-                blendTaper);
+        return with(draft -> draft.minEdgeMarginDiameters = Optional.of(diameters));
     }
 
     /** The same limits with the taper a blend has to run out at. */
     public LimitSet withBlendTaper(Taper taper) {
-        return new LimitSet(
-                allowed,
-                maxDepth,
-                maxDepthFraction,
-                maxLength,
-                maxArea,
-                maxSharpness,
-                minResidual,
-                minResidualFraction,
-                minEdgeMargin,
-                minEdgeMarginDiameters,
-                Optional.of(taper));
+        return with(draft -> draft.blendTaper = Optional.of(taper));
+    }
+
+    /** The limits of one set while a copy of it is being changed, which the record cannot be. */
+    private static final class Draft {
+        private final boolean allowed;
+        private Optional<Length> maxDepth = Optional.empty();
+        private Optional<Ratio> maxDepthFraction = Optional.empty();
+        private Optional<Ratio> hoopLoadedShare = Optional.empty();
+        private Optional<Length> maxLength = Optional.empty();
+        private Optional<BigDecimal> maxArea = Optional.empty();
+        private Optional<Ratio> maxSharpness = Optional.empty();
+        private Optional<Length> minResidual = Optional.empty();
+        private Optional<Ratio> minResidualFraction = Optional.empty();
+        private Optional<Length> minEdgeMargin = Optional.empty();
+        private Optional<BigDecimal> minEdgeMarginDiameters = Optional.empty();
+        private Optional<Taper> blendTaper = Optional.empty();
+
+        private Draft(boolean allowed) {
+            this.allowed = allowed;
+        }
+
+        private Draft(LimitSet from) {
+            this(from.allowed);
+            maxDepth = from.maxDepth;
+            maxDepthFraction = from.maxDepthFraction;
+            hoopLoadedShare = from.hoopLoadedShare;
+            maxLength = from.maxLength;
+            maxArea = from.maxArea;
+            maxSharpness = from.maxSharpness;
+            minResidual = from.minResidual;
+            minResidualFraction = from.minResidualFraction;
+            minEdgeMargin = from.minEdgeMargin;
+            minEdgeMarginDiameters = from.minEdgeMarginDiameters;
+            blendTaper = from.blendTaper;
+        }
+
+        private LimitSet build() {
+            return new LimitSet(
+                    allowed,
+                    maxDepth,
+                    maxDepthFraction,
+                    hoopLoadedShare,
+                    maxLength,
+                    maxArea,
+                    maxSharpness,
+                    minResidual,
+                    minResidualFraction,
+                    minEdgeMargin,
+                    minEdgeMarginDiameters,
+                    blendTaper);
+        }
     }
 
     /** A page that allows something but caps nothing, which the audit looks for. */
@@ -292,6 +237,22 @@ public record LimitSet(
         maxDepth.ifPresent(caps::add);
         fractionOf(maxDepthFraction, thickness).ifPresent(caps::add);
         return caps.stream().reduce(Length::min);
+    }
+
+    /**
+     * The deepest a score may be, which for one lying along the body is the share of the cap the page
+     * allows it, to the nearest thousandth with a tie going to the even one.
+     *
+     * <p>Hoop stress in a pressurised barrel is roughly twice the longitudinal stress, and it acts
+     * across a score that lies along the body. The page that states a share means the same score at the
+     * same depth is fine running round the barrel and too deep running along it.
+     */
+    public Optional<Length> depthCap(Length thickness, boolean hoopLoaded) {
+        Optional<Length> cap = depthCap(thickness);
+        if (!hoopLoaded || hoopLoadedShare.isEmpty()) {
+            return cap;
+        }
+        return cap.map(full -> hoopLoadedShare.get().of(full));
     }
 
     /** The least metal that may be left, taking the higher of the two forms. */
@@ -345,6 +306,7 @@ public record LimitSet(
                 && allowed == that.allowed
                 && maxDepth.equals(that.maxDepth)
                 && maxDepthFraction.equals(that.maxDepthFraction)
+                && hoopLoadedShare.equals(that.hoopLoadedShare)
                 && maxLength.equals(that.maxLength)
                 && sameAmount(maxArea, that.maxArea)
                 && maxSharpness.equals(that.maxSharpness)
@@ -361,6 +323,7 @@ public record LimitSet(
                 allowed,
                 maxDepth,
                 maxDepthFraction,
+                hoopLoadedShare,
                 maxLength,
                 maxArea.map(BigDecimal::stripTrailingZeros),
                 maxSharpness,
@@ -390,6 +353,7 @@ public record LimitSet(
         List<String> parts = new ArrayList<>();
         maxDepth.ifPresent(depth -> parts.add("depth " + depth.inches().toPlainString()));
         maxDepthFraction.ifPresent(fraction -> parts.add("depth " + fraction));
+        hoopLoadedShare.ifPresent(share -> parts.add("along the body " + share + " of that"));
         maxLength.ifPresent(length -> parts.add("length " + length.inches().toPlainString()));
         maxArea.ifPresent(area -> parts.add("area " + Decimals.text(area)));
         maxSharpness.ifPresent(sharpness -> parts.add("sharpness " + sharpness));

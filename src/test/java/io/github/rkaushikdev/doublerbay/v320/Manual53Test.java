@@ -97,6 +97,18 @@ class Manual53Test {
     }
 
     @Test
+    void aScoreAlongThePressurisedBarrelGetsHalfTheCap() {
+        for (DamageKind kind : List.of(DamageKind.SCRATCH, DamageKind.GOUGE, DamageKind.NICK)) {
+            LimitRow found = lookUp(kind);
+            assertThat(found.limits().hoopLoadedShare()).contains(new Ratio("0.50"));
+            assertThat(found.limits().depthCap(SKIN, true)).contains(new Length(2));
+            assertThat(found.limits().depthCap(SKIN, false)).contains(new Length(3));
+            assertThat(lookUp(kind, PanelKind.UNPRESSURISED_SKIN).limits().hoopLoadedShare())
+                    .isEmpty();
+        }
+    }
+
+    @Test
     void theTailConeGetsTheLoosestDentLimits() {
         LimitRow loose = lookUp(DamageKind.DENT, PanelKind.UNPRESSURISED_SKIN);
         LimitRow tight = lookUp(DamageKind.DENT);

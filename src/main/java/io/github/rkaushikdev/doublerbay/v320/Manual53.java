@@ -82,6 +82,12 @@ public final class Manual53 {
     /** The edge margin every limited row asks for, in diameters of the nearest fastener. */
     public static final BigDecimal TWO_DIAMETERS = new BigDecimal("2.0");
 
+    /**
+     * The share of the pressurised skin depth cap a score lying along the body may use. Hoop stress is
+     * about twice the longitudinal stress in the barrel, and it acts across a longitudinal score.
+     */
+    public static final Ratio HOOP_LOADED_SHARE = new Ratio("0.50");
+
     /** The taper a blend runs out at on barrel skin. */
     public static final Taper BLEND = new Taper(20);
 
@@ -195,6 +201,7 @@ public final class Manual53 {
                     new LimitKey(score.kind(), PanelKind.PRESSURISED_SKIN),
                     LimitSet.allowable()
                             .withMaxDepthFraction(new Ratio("0.05"))
+                            .withHoopLoadedShare(HOOP_LOADED_SHARE)
                             .withMinResidualFraction(new Ratio("0.85"))
                             .withMinEdgeMarginDiameters(TWO_DIAMETERS)
                             .withBlendTaper(BLEND),

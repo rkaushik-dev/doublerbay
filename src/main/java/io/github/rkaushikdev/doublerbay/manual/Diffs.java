@@ -30,6 +30,7 @@ public final class Diffs {
     private static final List<Field<?>> FIELDS = List.of(
             new Field<Length>("max_depth", LimitSet::maxDepth, true),
             new Field<Ratio>("max_depth_fraction", LimitSet::maxDepthFraction, true),
+            new Field<Ratio>("hoop_loaded_share", LimitSet::hoopLoadedShare, true),
             new Field<Length>("max_length", LimitSet::maxLength, true),
             new Field<BigDecimal>("max_area", LimitSet::maxArea, true),
             new Field<Ratio>("max_sharpness", LimitSet::maxSharpness, true),
