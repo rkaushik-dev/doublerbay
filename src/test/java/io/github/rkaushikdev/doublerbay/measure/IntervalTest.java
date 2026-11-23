@@ -141,4 +141,14 @@ class IntervalTest {
         DueAt due = DueAt.of(new Cycles(15000), null, LocalDate.of(2027, 3, 15));
         assertThat(due).hasToString("15000 FC or 2027-03-15");
     }
+
+    @Test
+    void anIntervalNamesTheFirstClockItRunsPastAnotherOn() {
+        Interval book = Interval.parse("500 FC / 750 FH / 6 MO / 180 DY");
+        assertThat(Interval.parse("400 FC / 800 FH").pastOn(book)).contains("800.0 FH is past 750.0 FH");
+        assertThat(Interval.parse("7 MO").pastOn(book)).contains("7 MO is past 6 MO");
+        assertThat(Interval.parse("200 DY").pastOn(book)).contains("200 DY is past 180 DY");
+        assertThat(Interval.parse("500 FC / 750 FH").pastOn(book)).isEmpty();
+        assertThat(Interval.parse("9000 FC").pastOn(Interval.parse("30 DY"))).isEmpty();
+    }
 }

@@ -160,7 +160,7 @@ public final class Desk {
                 Finding finding = unit.findings().latest(held);
                 Usage flown = unit.aircraft().logFor(finding.serial()).at(day);
                 Deferral granted = Deferral.grant(
-                        held,
+                        finding,
                         day,
                         flown,
                         by,

@@ -52,6 +52,30 @@ public record Interval(
         }
     }
 
+    /**
+     * The first clock this interval runs past another on, in words, looking only at the clocks both of
+     * them state: cycles, then hours, then months, then days.
+     */
+    public Optional<String> pastOn(Interval other) {
+        if (cycles.isPresent()
+                && other.cycles.isPresent()
+                && cycles.get().count() > other.cycles.get().count()) {
+            return Optional.of(cycles.get() + " is past " + other.cycles.get());
+        }
+        if (hours.isPresent()
+                && other.hours.isPresent()
+                && hours.get().minutes() > other.hours.get().minutes()) {
+            return Optional.of(hours.get() + " is past " + other.hours.get());
+        }
+        if (months.isPresent() && other.months.isPresent() && months.get() > other.months.get()) {
+            return Optional.of(months.get() + " MO is past " + other.months.get() + " MO");
+        }
+        if (days.isPresent() && other.days.isPresent() && days.get() > other.days.get()) {
+            return Optional.of(days.get() + " DY is past " + other.days.get() + " DY");
+        }
+        return Optional.empty();
+    }
+
     /** An interval from whichever clocks are given; a null clock is one the interval is silent on. */
     public static Interval of(Cycles cycles, Hours hours, Integer months, Integer days) {
         return new Interval(

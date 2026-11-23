@@ -183,18 +183,15 @@ public final class Seeding {
 
         // 5388 has one dent, deferred, which puts it on the due list.
         FindingId reference = new FindingId(2025, 5);
-        Intake.takeIn(
-                unit,
-                book,
-                catalogue,
-                card(
-                        reference,
-                        "5388",
-                        DamageKind.DENT,
-                        dent("0.120"),
-                        cabin(30, 4),
-                        LocalDate.of(2025, 2, 2),
-                        DamageOrigin.HANDLING));
+        Finding dented = card(
+                reference,
+                "5388",
+                DamageKind.DENT,
+                dent("0.120"),
+                cabin(30, 4),
+                LocalDate.of(2025, 2, 2),
+                DamageOrigin.HANDLING);
+        Intake.takeIn(unit, book, catalogue, dented);
         cards++;
         unit.flush();
         DispositionRecord record = unit.dispositions().get(reference);
@@ -202,7 +199,7 @@ public final class Seeding {
         unit.dispositions().save(record.movedTo(DispositionState.DEFERRED, LocalDate.of(2025, 2, 4), "j.mercer"));
         unit.deferrals()
                 .grant(Deferral.grant(
-                        reference,
+                        dented,
                         LocalDate.of(2025, 2, 4),
                         flown(14000, 24600),
                         "j.mercer",

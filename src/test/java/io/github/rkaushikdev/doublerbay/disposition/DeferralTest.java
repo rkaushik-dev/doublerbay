@@ -5,10 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.doublerbay.BadReading;
+import io.github.rkaushikdev.doublerbay.damage.Crack;
+import io.github.rkaushikdev.doublerbay.damage.DamageKind;
+import io.github.rkaushikdev.doublerbay.damage.DamageOrigin;
+import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
+import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.DueAt;
 import io.github.rkaushikdev.doublerbay.measure.Interval;
+import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.measure.Usage;
+import io.github.rkaushikdev.doublerbay.support.Sample;
 import io.github.rkaushikdev.doublerbay.tolerance.InspectionMethod;
 import java.time.LocalDate;
 import java.util.List;
@@ -157,5 +164,64 @@ class DeferralTest {
         Deferral held =
                 Deferral.grant(DR, GRANTED, AT, "structures", InspectionMethod.DVI, null, null, "doubler on order");
         assertThat(held.reason()).isEqualTo("doubler on order");
+    }
+
+    @Test
+    void theBookGivesACrackAndAHoleAShorterLeashThanADent() {
+        assertThat(Deferral.bookLimitFor(DamageKind.DENT)).isEqualTo(Deferral.STANDARD_DEFERRAL);
+        assertThat(Deferral.bookLimitFor(DamageKind.CORROSION)).isEqualTo(Deferral.STANDARD_DEFERRAL);
+        assertThat(Deferral.bookLimitFor(DamageKind.CRACK)).hasToString("100 FC / 150.0 FH / 30 DY");
+        assertThat(Deferral.bookLimitFor(DamageKind.HOLE)).isEqualTo(Deferral.OPENING_DEFERRAL);
+        assertThat(Deferral.bookLimitFor(DamageKind.PUNCTURE)).isEqualTo(Deferral.OPENING_DEFERRAL);
+    }
+
+    @Test
+    void aCrackDeferredOnTheBookGetsTheCrackAllowance() {
+        assertThat(Deferral.limitFor(DamageKind.CRACK, null, null, GRANTED)).isEqualTo(Deferral.CRACK_DEFERRAL);
+        Interval tighter = Interval.parse("40 FC / 10 DY");
+        assertThat(Deferral.limitFor(DamageKind.CRACK, tighter, null, GRANTED)).isEqualTo(tighter);
+    }
+
+    @Test
+    void anEngineerCannotSetALongerLimitThanTheBookAllowsTheKind() {
+        assertThatThrownBy(() -> Deferral.limitFor(DamageKind.CRACK, Interval.parse("500 FC"), null, GRANTED))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("for a crack, and 500 FC is past 100 FC");
+        assertThatThrownBy(() -> Deferral.limitFor(DamageKind.DENT, Interval.parse("181 DY"), null, GRANTED))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("181 DY is past 180 DY");
+        assertThat(Deferral.limitFor(DamageKind.DENT, Interval.parse("500 FC / 12 MO"), null, GRANTED))
+                .isEqualTo(Interval.parse("500 FC / 12 MO"));
+    }
+
+    @Test
+    void theKindsLimitIsStillPulledInToTheNextCheck() {
+        Interval limited = Deferral.limitFor(DamageKind.CRACK, null, GRANTED.plusDays(12), GRANTED);
+        assertThat(limited.days()).contains(12);
+        assertThat(limited.cycles()).isEqualTo(Deferral.CRACK_DEFERRAL.cycles());
+    }
+
+    @Test
+    void aCardIsGrantedOnTheAllowanceForItsOwnKind() {
+        Finding crack = Sample.cardWith()
+                .kind(DamageKind.CRACK)
+                .geometry(new Crack(Length.ofInches("0.400"), Angle.ofDegrees(90)))
+                .origin(DamageOrigin.FATIGUE)
+                .build();
+        Deferral held = Deferral.grant(crack, GRANTED, AT, "structures", InspectionMethod.HFEC, null, null, "");
+        assertThat(held.against()).isEqualTo(crack.reference());
+        assertThat(held.limit()).isEqualTo(Deferral.CRACK_DEFERRAL);
+        assertThat(held.due().cycles().orElseThrow().count()).isEqualTo(13900);
+    }
+
+    @Test
+    void aTightenedLimitThatIsLongerOnAClockIsRefused() {
+        assertThatThrownBy(() -> deferral().tightenedTo(Interval.parse("600 FC"), "chief engineer"))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("is not a longer one, and 600 FC is past 500 FC");
+        assertThat(deferral()
+                        .tightenedTo(Interval.parse("12 MO"), "chief engineer")
+                        .limit())
+                .isEqualTo(Interval.parse("12 MO"));
     }
 }
