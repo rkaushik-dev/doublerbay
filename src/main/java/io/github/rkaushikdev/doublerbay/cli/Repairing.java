@@ -16,6 +16,7 @@ import io.github.rkaushikdev.doublerbay.repair.RepairPair;
 import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
 import io.github.rkaushikdev.doublerbay.repair.RepairScheme;
 import io.github.rkaushikdev.doublerbay.repair.Schemes;
+import io.github.rkaushikdev.doublerbay.report.RepairWeight;
 import io.github.rkaushikdev.doublerbay.service.Embodiment;
 import io.github.rkaushikdev.doublerbay.service.Repairs;
 import io.github.rkaushikdev.doublerbay.store.StoreContext;
@@ -255,18 +256,23 @@ public final class Repairing {
                 return Main.OK;
             }
             List<List<String>> rows = new ArrayList<>();
-            rows.add(List.of("reference", "part", "against", "category", "fitted", "off"));
-            for (RepairRecord one : fitted) {
-                rows.add(List.of(
-                        one.reference().toString(),
-                        one.part().toString(),
-                        one.against().toString(),
-                        one.scheme().category().name(),
-                        one.embodied().toString(),
-                        one.removed().map(LocalDate::toString).orElse("")));
-            }
+            rows.add(List.of("reference", "part", "against", "category", "lb", "fitted", "off"));
+            fitted.stream().map(RepairList::row).forEach(rows::add);
             say(Output.columns(rows));
+            say(RepairWeight.of(fitted).toString());
             return Main.OK;
+        }
+
+        /** One repair as a line of the list, its plate weight beside its category. */
+        static List<String> row(RepairRecord one) {
+            return List.of(
+                    one.reference().toString(),
+                    one.part().toString(),
+                    one.against().toString(),
+                    one.scheme().category().name(),
+                    one.scheme().doubler().weight().toPlainString(),
+                    one.embodied().toString(),
+                    one.removed().map(LocalDate::toString).orElse(""));
         }
     }
 

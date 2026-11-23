@@ -182,6 +182,8 @@ class CliRepairingTest {
         String listed = invoke(database, "repair", "list", "--tail", "5127").output();
         assertThat(listed).contains("RP-53-0001");
         assertThat(listed).contains("DR-2025-000001");
+        assertThat(listed).contains(" lb ");
+        assertThat(listed).containsPattern("1 fitted repairs weigh 0\\.\\d{3} lb");
     }
 
     @Test

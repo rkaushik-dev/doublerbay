@@ -4,6 +4,8 @@ import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.measure.FastenerSize;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.structure.Material;
+import io.github.rkaushikdev.doublerbay.util.Decimals;
+import java.math.BigDecimal;
 import java.util.Objects;
 
 /**
@@ -73,6 +75,18 @@ public record DoublerPlan(
 
     private static Length skirtOf(Length edge, Length rowSpacing, int rows) {
         return edge.plus(rowSpacing.times(rows - 1));
+    }
+
+    /**
+     * What the plate weighs in pounds, to three places: its area, its gauge and the density of its
+     * series. The fasteners are left to the weighing, since they replace the skin cut out of the hole.
+     */
+    public BigDecimal weight() {
+        BigDecimal cubicMils = Decimals.times(
+                Decimals.times(BigDecimal.valueOf(along.mils()), BigDecimal.valueOf(around.mils())),
+                BigDecimal.valueOf(gauge.mils()));
+        BigDecimal cubicInches = Decimals.over(cubicMils, BigDecimal.valueOf(1_000_000_000L));
+        return Decimals.quantize(Decimals.times(cubicInches, material.family().density()), 3);
     }
 
     /** Every hole in the patch, four sides of it. */

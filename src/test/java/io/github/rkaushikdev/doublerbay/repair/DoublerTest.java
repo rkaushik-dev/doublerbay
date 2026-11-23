@@ -231,6 +231,24 @@ class DoublerTest {
     }
 
     @Test
+    void aPlateWeighsItsAreaTimesItsGaugeTimesItsDensity() {
+        assertThat(laidOut(1, 4).weight()).isEqualByComparingTo("0.045");
+        DoublerPlan heavy = new DoublerPlan(
+                inch("0.100"),
+                Material.lookup("7075-T6 CLAD"),
+                inch("10"),
+                inch("10"),
+                new FastenerSize(5),
+                2,
+                4,
+                inch("0.625"),
+                inch("0.625"),
+                inch("0.391"));
+        assertThat(heavy.weight()).isEqualByComparingTo("1.010");
+        assertThat(heavy.weight().scale()).isEqualTo(3);
+    }
+
+    @Test
     void aRowOfOneFastenerIsNotAJoint() {
         assertThatThrownBy(() -> laidOut(1, 1))
                 .isInstanceOf(BadReading.class)
