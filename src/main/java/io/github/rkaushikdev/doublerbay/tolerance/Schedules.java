@@ -41,6 +41,13 @@ public final class Schedules {
     public static final int TEMPORARY_LIMIT_MONTHS = 12;
 
     /**
+     * How much flying a temporary repair may see before it is replaced properly, by the kind of skin,
+     * whichever of these and the months comes first. A stopgap on the lower wing sees the bending on
+     * every flight and gets the fewest; one on the tail cone carries next to nothing and gets the most.
+     */
+    public static final Map<PanelKind, Cycles> TEMPORARY_CYCLES = temporaryCycles();
+
+    /**
      * Growth rates by the kind of skin the repair is on. The lower wing surface is the fast one because
      * it spends the flight in tension.
      */
@@ -57,6 +64,28 @@ public final class Schedules {
         held.put(PanelKind.WING_UPPER, basis("6.000", "0.050"));
         held.put(PanelKind.WING_LOWER, basis("4.000", "0.150"));
         return Collections.unmodifiableMap(held);
+    }
+
+    private static Map<PanelKind, Cycles> temporaryCycles() {
+        Map<PanelKind, Cycles> held = new LinkedHashMap<>();
+        held.put(PanelKind.PRESSURISED_SKIN, new Cycles(3000));
+        held.put(PanelKind.CROWN_SKIN, new Cycles(3000));
+        held.put(PanelKind.BELLY_SKIN, new Cycles(2500));
+        held.put(PanelKind.UNPRESSURISED_SKIN, new Cycles(6000));
+        held.put(PanelKind.WING_UPPER, new Cycles(4000));
+        held.put(PanelKind.WING_LOWER, new Cycles(1500));
+        return Collections.unmodifiableMap(held);
+    }
+
+    /**
+     * How long a temporary repair on a kind of skin may stay on: the months for every kind, and the
+     * cycles as well for a kind that has a figure, whichever comes first.
+     */
+    public static Interval temporaryLimitFor(PanelKind kind) {
+        Interval months = Interval.ofMonths(TEMPORARY_LIMIT_MONTHS);
+        return Optional.ofNullable(TEMPORARY_CYCLES.get(kind))
+                .map(months::withCycles)
+                .orElse(months);
     }
 
     private static GrowthBasis basis(String critical, String growthPerThousand) {
@@ -79,26 +108,29 @@ public final class Schedules {
     /**
      * Work out the inspection programme a repair of this category carries, none for a permanent repair.
      *
-     * <p>A temporary repair gets a replacement limit and no repeat. An inspected repair gets a repeat of
-     * the growth life from what the method finds over the safety factor, and a threshold of the repeat
-     * times the threshold factor.
+     * <p>A temporary repair gets a replacement limit and no repeat, in months and in cycles for the kind
+     * of skin it is on. An inspected repair gets a repeat of the growth life from what the method finds
+     * over the safety factor, and a threshold of the repeat times the threshold factor.
      *
      * @throws BadReading when the method leaves no room for a repeat on the kind of skin
      */
     public static Optional<InspectionSchedule> scheduleFor(
             RepairCategory category, PanelKind kind, InspectionMethod method) {
-        if (!category.needsInspection()) {
-            return Optional.empty();
-        }
-        if (category == RepairCategory.C) {
-            return Optional.of(InspectionSchedule.of(method, Interval.ofMonths(TEMPORARY_LIMIT_MONTHS), null));
-        }
+        return switch (category) {
+            case A -> Optional.empty();
+            case B -> Optional.of(repeating(kind, method));
+            case C -> Optional.of(InspectionSchedule.of(method, temporaryLimitFor(kind), null));
+        };
+    }
+
+    /** The repeating programme an inspected repair carries, off the crack growth basis for the skin. */
+    private static InspectionSchedule repeating(PanelKind kind, InspectionMethod method) {
         Cycles growth = basisFor(kind).growthCycles(method.findsDownTo());
         Cycles repeat = new Cycles(Math.floorDiv(growth.count(), SAFETY_FACTOR));
         if (repeat.count() < 1) {
             throw new BadReading(method + " leaves no room for a repeat interval on " + kind);
         }
-        return Optional.of(InspectionSchedule.of(
-                method, Interval.ofCycles(new Cycles(repeat.count() * THRESHOLD_FACTOR)), Interval.ofCycles(repeat)));
+        return InspectionSchedule.of(
+                method, Interval.ofCycles(new Cycles(repeat.count() * THRESHOLD_FACTOR)), Interval.ofCycles(repeat));
     }
 }

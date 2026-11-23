@@ -136,6 +136,19 @@ class CliRepairingTest {
     }
 
     @Test
+    void aTemporaryDrawingSaysWhenItComesOff() {
+        Database database = stocked();
+        String printed = draw(database, assessed(database), "--temporary").output();
+        assertThat(printed).contains("replace by").contains("3000 FC / 12 MO, whichever comes first");
+    }
+
+    @Test
+    void aPermanentDrawingHasNoReplacementLine() {
+        Database database = stocked();
+        assertThat(draw(database, assessed(database)).output()).doesNotContain("replace by");
+    }
+
+    @Test
     void aFastenerSizeCanBeAskedFor() {
         Database database = stocked();
         assertThat(draw(database, assessed(database), "--fastener", "6").output())

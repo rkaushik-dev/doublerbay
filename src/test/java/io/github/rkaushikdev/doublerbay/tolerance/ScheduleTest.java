@@ -175,4 +175,31 @@ class ScheduleTest {
         InspectionSchedule once = InspectionSchedule.of(InspectionMethod.GVI, Interval.ofMonths(12), null);
         assertThat(once).hasToString("general visual once by 12 MO");
     }
+
+    @Test
+    void aTemporaryRepairComesOffOnTheCyclesOrTheMonthsWhicheverIsFirst() {
+        assertThat(Schedules.temporaryLimitFor(PanelKind.PRESSURISED_SKIN)).hasToString("3000 FC / 12 MO");
+        assertThat(Schedules.temporaryLimitFor(PanelKind.WING_LOWER)).hasToString("1500 FC / 12 MO");
+        assertThat(Schedules.temporaryLimitFor(PanelKind.UNPRESSURISED_SKIN)).hasToString("6000 FC / 12 MO");
+        assertThat(Schedules.temporaryLimitFor(PanelKind.FAIRING)).hasToString("12 MO");
+    }
+
+    @Test
+    void aTemporaryRepairOnTheLowerWingIsReplacedOnItsCycles() {
+        InspectionSchedule schedule = made(RepairCategory.C, PanelKind.WING_LOWER, InspectionMethod.DVI);
+        assertThat(schedule.isRepeating()).isFalse();
+        assertThat(schedule).hasToString("detailed visual once by 1500 FC / 12 MO");
+        DueAt due = schedule.firstDue(FLOWN, EMBODIED);
+        assertThat(due.cycles().orElseThrow().count()).isEqualTo(13800 + 1500);
+        assertThat(due.isDue(UtilisationLog.usage(15300, 25000), EMBODIED.plusMonths(2)))
+                .isTrue();
+        assertThat(due.isDue(UtilisationLog.usage(15299, 25000), EMBODIED.plusMonths(2)))
+                .isFalse();
+    }
+
+    @Test
+    void aPermanentRepairStillCarriesNothing() {
+        assertThat(Schedules.scheduleFor(RepairCategory.A, PanelKind.WING_LOWER, InspectionMethod.HFEC))
+                .isEmpty();
+    }
 }

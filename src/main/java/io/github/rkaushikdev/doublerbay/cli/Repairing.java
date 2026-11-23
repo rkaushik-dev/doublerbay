@@ -21,6 +21,7 @@ import io.github.rkaushikdev.doublerbay.service.Embodiment;
 import io.github.rkaushikdev.doublerbay.service.Repairs;
 import io.github.rkaushikdev.doublerbay.store.StoreContext;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
+import io.github.rkaushikdev.doublerbay.tolerance.Schedules;
 import io.github.rkaushikdev.doublerbay.util.Decimals;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -78,6 +79,10 @@ public final class Repairing {
                 List.of("row spacing", inches(plan.rowSpacing())),
                 List.of("edge distance", inches(plan.edgeDistance()))));
         scheme.filler().ifPresent(filler -> rows.add(List.of("filler", inches(filler))));
+        if (!scheme.category().isPermanent()) {
+            rows.add(List.of(
+                    "replace by", Schedules.temporaryLimitFor(placement.panelKind()) + ", whichever comes first"));
+        }
         Schemes.memberUnder(plan, placement)
                 .ifPresent(
                         member -> rows.add(List.of("over", member + ", joggle over it or take it into the pattern")));
