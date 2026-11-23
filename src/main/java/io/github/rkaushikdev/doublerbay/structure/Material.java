@@ -3,6 +3,7 @@ package io.github.rkaushikdev.doublerbay.structure;
 import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.NotOnFile;
 import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.util.Decimals;
 import io.github.rkaushikdev.doublerbay.util.Literal;
 import io.github.rkaushikdev.doublerbay.util.Text;
 import java.math.BigDecimal;
@@ -48,6 +49,13 @@ public record Material(String alloy, Temper temper, boolean clad, int ultimateKs
             new Material("7075", Temper.T6, false, 83, 73),
             new Material("7050", Temper.T7451, false, 76, 67),
             new Material("2024", Temper.ANNEALED, true, 26, 11)));
+
+    /**
+     * Bearing strength over ultimate, at the edge distance of one and a half diameters the desk takes
+     * for every fastener. The handbook figure at two diameters is higher, and a repair laid out at the
+     * preferred two and a half is never read at the lower one, so this is the conservative side.
+     */
+    public static final BigDecimal BEARING_RATIO = new BigDecimal("1.5");
 
     /** A material with a four digit alloy that does not yield above its ultimate. */
     public Material {
@@ -105,6 +113,11 @@ public record Material(String alloy, Temper temper, boolean clad, int ultimateKs
             return Family.SEVEN_THOUSAND;
         }
         throw new BadReading(alloy + " is not a series this desk carries");
+    }
+
+    /** What the sheet takes in bearing before a fastener hole elongates, in ksi, whole ksi cut down. */
+    public int bearingKsi() {
+        return Decimals.times(BigDecimal.valueOf(ultimateKsi), BEARING_RATIO).intValue();
     }
 
     /** Whether the alloy is from the tough series. */

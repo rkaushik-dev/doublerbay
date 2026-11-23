@@ -95,6 +95,42 @@ class DoublerTest {
     }
 
     @Test
+    void aFastenerBearsOnTheSheetAtOneAndAHalfTimesItsUltimate() {
+        assertThat(CLAD.bearingKsi()).isEqualTo(96);
+        assertThat(Material.lookup("7075-T6").bearingKsi()).isEqualTo(124);
+        assertThat(Doublers.bearingAllowable(new FastenerSize(5), inch("0.040"), CLAD))
+                .isEqualTo(599);
+        assertThat(Doublers.bearingAllowable(new FastenerSize(5), inch("0.032"), CLAD))
+                .isEqualTo(479);
+    }
+
+    @Test
+    void theFastenerCarriesTheLesserOfShearAndBearing() {
+        assertThat(Doublers.fastenerAllowable(new FastenerSize(5), inch("0.040"), CLAD))
+                .isEqualTo(Doublers.shearAllowable(new FastenerSize(5)));
+        assertThat(Doublers.fastenerAllowable(new FastenerSize(5), inch("0.032"), CLAD))
+                .isEqualTo(479);
+        assertThat(Doublers.fastenerAllowable(new FastenerSize(8), inch("0.040"), CLAD))
+                .isEqualTo(960);
+    }
+
+    @Test
+    void thinSkinIsCountedOffBearingAndTakesMoreFasteners() {
+        assertThat(Doublers.carriedLoad(inch("0.032"), inch("2.000"), CLAD)).isEqualTo(4096);
+        assertThat(Math.ceilDiv(4096, Doublers.shearAllowable(new FastenerSize(5))))
+                .isEqualTo(7);
+        assertThat(Doublers.fastenersEachSide(inch("0.032"), inch("2.000"), CLAD, new FastenerSize(5)))
+                .isEqualTo(9);
+    }
+
+    @Test
+    void aSheetWithNoThicknessBearsNothing() {
+        assertThatThrownBy(() -> Doublers.bearingAllowable(new FastenerSize(5), inch("0"), CLAD))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("bears on a sheet with a thickness");
+    }
+
+    @Test
     void aBiggerFastenerNeedsFewerOfThem() {
         int small = Doublers.fastenersEachSide(inch("0.040"), inch("2.000"), CLAD, new FastenerSize(4));
         int large = Doublers.fastenersEachSide(inch("0.040"), inch("2.000"), CLAD, new FastenerSize(8));

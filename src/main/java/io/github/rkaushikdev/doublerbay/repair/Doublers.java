@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Sizing a doubler, which comes down to putting the load back where the metal was.
@@ -56,11 +57,17 @@ public final class Doublers {
      * @throws BadReading when there is no allowable on file for the size
      */
     public static int shearAllowable(FastenerSize size) {
-        Integer allowable = SHEAR_ALLOWABLE.get(size.dash());
-        if (allowable == null) {
-            throw new BadReading("no shear allowable on file for a " + size);
-        }
-        return allowable;
+        return Optional.ofNullable(SHEAR_ALLOWABLE.get(size.dash()))
+                .orElseThrow(() -> new BadReading("no shear allowable on file for a " + size));
+    }
+
+    /** What a stress in ksi comes to over a section of two lengths, in pounds. */
+    private static int pounds(Length one, Length other, int ksi) {
+        BigDecimal milsPerInch = BigDecimal.valueOf(Length.MILS_PER_INCH);
+        BigDecimal area = Decimals.over(
+                Decimals.times(BigDecimal.valueOf(one.mils()), BigDecimal.valueOf(other.mils())),
+                Decimals.times(milsPerInch, milsPerInch));
+        return Decimals.toInt(Decimals.times(Decimals.times(area, ksi), KSI));
     }
 
     /** The load the strip of skin being cut out was carrying, in pounds. */
@@ -68,16 +75,40 @@ public final class Doublers {
         if (thickness.mils() <= 0 || width.mils() <= 0) {
             throw new BadReading("a strip of skin has a thickness and a width");
         }
-        BigDecimal milsPerInch = BigDecimal.valueOf(Length.MILS_PER_INCH);
-        BigDecimal area = Decimals.over(
-                Decimals.times(BigDecimal.valueOf(thickness.mils()), BigDecimal.valueOf(width.mils())),
-                Decimals.times(milsPerInch, milsPerInch));
-        return Decimals.toInt(Decimals.times(Decimals.times(area, material.ultimateKsi()), KSI));
+        return pounds(thickness, width, material.ultimateKsi());
     }
 
-    /** How many fasteners it takes to get that load into the doubler, each side. */
+    /**
+     * What one fastener of a size takes bearing on a sheet of a gauge, in pounds: the shank, the sheet
+     * and the sheet's bearing strength.
+     */
+    public static int bearingAllowable(FastenerSize size, Length sheet, Material material) {
+        if (sheet.mils() <= 0) {
+            throw new BadReading("a fastener bears on a sheet with a thickness");
+        }
+        return pounds(size.diameter(), sheet, material.bearingKsi());
+    }
+
+    /**
+     * What one fastener carries in a sheet, which is the lesser of shearing the fastener and bearing
+     * on the sheet.
+     *
+     * <p>On thin skin the hole gives before the rivet does. A dash five in 0.040 clad shears first, the
+     * same rivet in 0.032 elongates its hole first, and a pattern counted off shear alone in the thin
+     * sheet is short of fasteners by the difference.
+     */
+    public static int fastenerAllowable(FastenerSize size, Length sheet, Material material) {
+        return Math.min(shearAllowable(size), bearingAllowable(size, sheet, material));
+    }
+
+    /**
+     * How many fasteners it takes to get that load into the doubler, each side. The skin is the
+     * thinner of the two sheets, since the doubler goes on a gauge heavier, so the skin is what the
+     * fasteners bear on.
+     */
     public static int fastenersEachSide(Length thickness, Length width, Material material, FastenerSize size) {
-        return Math.max(Math.ceilDiv(carriedLoad(thickness, width, material), shearAllowable(size)), 1);
+        return Math.max(
+                Math.ceilDiv(carriedLoad(thickness, width, material), fastenerAllowable(size, thickness, material)), 1);
     }
 
     /**
