@@ -71,6 +71,7 @@ class CorrosionRoutesTest {
                     .sequence(sequence)
                     .kind(DamageKind.CORROSION)
                     .geometry(rust(depth))
+                    .at(Sample.cabinPoint(15, "10.000", 6, "4.000"))
                     .found(found)
                     .origin(DamageOrigin.ENVIRONMENT)
                     .build();

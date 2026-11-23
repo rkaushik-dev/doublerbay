@@ -17,6 +17,11 @@ import io.github.rkaushikdev.doublerbay.util.Literal;
  * the history of that location is an input to the classification, and a desk that grades each finding
  * on its own can never produce a level two.
  *
+ * <p>Corrosion that is widespread, running across more than one structural element, and outside
+ * the limits is level two the first time it is found. One blend on one element is the programme
+ * having missed a spot. The same loss across a frame line is the programme not reaching that area at
+ * all, and waiting for it to come back before calling it that is waiting a whole interval for nothing.
+ *
  * <p>Level three is reportable. The authority hears about it and so does the type certificate holder,
  * and there is a clock on it.
  *
@@ -57,13 +62,9 @@ public enum CorrosionLevel {
         if (context.urgentAirworthinessConcern()) {
             return THREE;
         }
-        if (context.withinLimits() && !finding.exfoliating()) {
-            return ONE;
-        }
-        if (context.foundHereBefore()) {
-            return TWO;
-        }
-        return ONE;
+        boolean coping = context.withinLimits() && !finding.exfoliating();
+        boolean notReached = context.foundHereBefore() || context.widespread();
+        return coping || !notReached ? ONE : TWO;
     }
 
     /** Level three goes to the authority and to the manufacturer. */

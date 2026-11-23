@@ -156,4 +156,26 @@ class CpcpTest {
         // Reassigning an entry's level does not compile: every field is final and there is no setter.
         Types.isFrozen(CorrosionEntry.class);
     }
+
+    @Test
+    void widespreadCorrosionOutsideTheLimitsIsLevelTwoTheFirstTime() {
+        CorrosionContext spread = new CorrosionContext(PART, false, false, false, true);
+        assertThat(CorrosionLevel.levelFor(rot(), spread)).isSameAs(CorrosionLevel.TWO);
+        assertThat(spread).hasToString("5310-143L, first time here, widespread");
+    }
+
+    @Test
+    void widespreadCorrosionTheProgrammeIsCopingWithIsStillLevelOne() {
+        CorrosionContext spread = new CorrosionContext(PART, true, false, false, true);
+        assertThat(CorrosionLevel.levelFor(rot(), spread)).isSameAs(CorrosionLevel.ONE);
+        assertThat(CorrosionLevel.levelFor(rot("0.004", true), spread)).isSameAs(CorrosionLevel.TWO);
+    }
+
+    @Test
+    void corrosionOnOneElementIsNotWidespreadUnlessSaidSo() {
+        assertThat(context().widespread()).isFalse();
+        assertThat(context(false, false, true).widespread()).isFalse();
+        assertThat(CorrosionLevel.levelFor(rot(), new CorrosionContext(PART, false, false, true, true)))
+                .isSameAs(CorrosionLevel.THREE);
+    }
 }

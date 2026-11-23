@@ -75,8 +75,11 @@ public final class Seeding {
     }
 
     private static FuselagePoint cabin(int frame, int stringer) {
-        return new FuselagePoint(
-                new Frame(frame), inches("10.000"), new Stringer(stringer, Side.LEFT), inches("0.000"));
+        return cabin(frame, stringer, "0.000");
+    }
+
+    private static FuselagePoint cabin(int frame, int stringer, String down) {
+        return new FuselagePoint(new Frame(frame), inches("10.000"), new Stringer(stringer, Side.LEFT), inches(down));
     }
 
     private static Aircraft aircraftOf(SeedTail tail) {
@@ -163,7 +166,8 @@ public final class Seeding {
             cards++;
         }
 
-        // 5240 has corrosion that came back in the same place, which is a level two.
+        // 5240 has corrosion that came back in the same place, which is a level two. It sits inside one
+        // bay so the second finding is the one that makes it a level two, not the stringer under it.
         List<LocalDate> found = List.of(LocalDate.of(2023, 6, 1), LocalDate.of(2025, 1, 12));
         for (int step = 3; step < 3 + found.size(); step++) {
             Intake.takeIn(
@@ -175,7 +179,7 @@ public final class Seeding {
                             "5240",
                             DamageKind.CORROSION,
                             rust("0.030"),
-                            cabin(22, 9),
+                            cabin(22, 9, "4.000"),
                             found.get(step - 3),
                             DamageOrigin.ENVIRONMENT));
             cards++;

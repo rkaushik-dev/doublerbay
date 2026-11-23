@@ -141,7 +141,7 @@ class IntakeTest {
     void corrosionInADifferentPlaceStaysLevelOne() {
         Corrosion deep = corrosion("0.030");
         taken(rustCard(1, DAY, deep));
-        Intake elsewhere = taken(rustCard(2, LATER, deep, Sample.cabinPointAtFrame(40)));
+        Intake elsewhere = taken(rustCard(2, LATER, deep, Sample.cabinPoint(40, "10.000", 6, "4.000")));
         assertThat(elsewhere.graded().orElseThrow().level()).isSameAs(CorrosionLevel.ONE);
     }
 
@@ -223,5 +223,19 @@ class IntakeTest {
     @Test
     void anIntakeWithNoGradingSaysItWentNowhere() {
         assertThat(new Intake(new FindingId(2025, 1)).wentOnTheProgramme()).isFalse();
+    }
+
+    @Test
+    void deepCorrosionAcrossAStringerLineIsLevelTwoTheFirstTimeItIsFound() {
+        Corrosion deep = corrosion("0.030");
+        Intake across = taken(rustCard(1, DAY, deep, Sample.cabinPointAtFrame(40)));
+        assertThat(across.graded().orElseThrow().level()).isSameAs(CorrosionLevel.TWO);
+    }
+
+    @Test
+    void theSameCorrosionInsideOneBayIsLevelOneTheFirstTime() {
+        Corrosion deep = corrosion("0.030");
+        Intake inside = taken(rustCard(1, DAY, deep, Sample.cabinPoint(40, "10.000", 6, "4.000")));
+        assertThat(inside.graded().orElseThrow().level()).isSameAs(CorrosionLevel.ONE);
     }
 }
