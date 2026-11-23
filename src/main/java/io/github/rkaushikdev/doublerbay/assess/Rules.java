@@ -347,7 +347,12 @@ public final class Rules {
         Length extent = held.cleanup().blendExtent(covered, depth.get());
         Length panel = held.placement().panelExtent();
         BigDecimal share = Decimals.over(BigDecimal.valueOf(extent.mils()), BigDecimal.valueOf(panel.mils()));
-        String detail = "a blend covering " + inches(extent) + " of a " + inches(panel) + " panel";
+        String ends = held.cleanup()
+                .minEndRadius()
+                .filter(radius -> extent.equals(radius.times(2)))
+                .map(radius -> ", as wide as its " + inches(radius) + " ends,")
+                .orElse("");
+        String detail = "a blend covering " + inches(extent) + ends + " of a " + inches(panel) + " panel";
         if (held.cleanup().withinPanelShare(extent, panel)) {
             return answer(true, "blend share", detail, Disposition.REPAIRABLE);
         }

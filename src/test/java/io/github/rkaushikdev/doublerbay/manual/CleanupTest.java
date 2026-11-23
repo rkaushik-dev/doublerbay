@@ -39,7 +39,9 @@ class CleanupTest {
 
     @Test
     void aRuleReadsBackHowTheBlendRuns() {
-        assertThat(rule()).hasToString("blend at 20:1, up to 25.00% of the panel");
+        assertThat(rule()).hasToString("blend at 20:1 with 0.250 ends, up to 25.00% of the panel");
+        assertThat(CleanupRule.of(new Taper(20), true, null, new BigDecimal("0.25")))
+                .hasToString("blend at 20:1, up to 25.00% of the panel");
         assertThat(rule(null, false, null, null)).hasToString("not blendable");
     }
 
@@ -184,5 +186,14 @@ class CleanupTest {
     @Test
     void theRulesReadBackHowManyKindsTheyCover() {
         assertThat(Cleanups.standardRules()).hasToString("cleanup rules for 11 kinds");
+    }
+
+    @Test
+    void aBlendIsNeverNarrowerThanTheCutterItsEndsAreFormedWith() {
+        CleanupRule radiused = CleanupRule.blendable(new Taper(20), inch("0.250"), new BigDecimal("0.25"));
+        assertThat(radiused.blendExtent(inch("0.060"), inch("0.004"))).isEqualTo(inch("0.500"));
+        assertThat(radiused.blendExtent(inch("2.000"), inch("0.010"))).isEqualTo(inch("2.400"));
+        CleanupRule square = CleanupRule.of(new Taper(20), true, null, null);
+        assertThat(square.blendExtent(inch("0.060"), inch("0.004"))).isEqualTo(inch("0.220"));
     }
 }

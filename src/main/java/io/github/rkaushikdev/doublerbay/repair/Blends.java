@@ -55,7 +55,8 @@ public final class Blends {
                 cleanup.taper(),
                 residual,
                 breaches,
-                breaches && cleanup.finishRequiredThroughClad());
+                breaches && cleanup.finishRequiredThroughClad(),
+                cleanup.minEndRadius());
     }
 
     /** Whether grinding it out actually gets the damage inside the book. */

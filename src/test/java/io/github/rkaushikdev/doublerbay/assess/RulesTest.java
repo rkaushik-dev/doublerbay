@@ -350,6 +350,22 @@ class RulesTest {
     }
 
     @Test
+    void aBlendNarrowerThanItsEndsSaysItWasWidenedToThem() {
+        Finding nick = Sample.cardWith()
+                .kind(DamageKind.NICK)
+                .geometry(new Scoring(inch("0.002"), inch("0.100"), inch("0.050"), Angle.ofDegrees(0)))
+                .at(Sample.cabinPointOn(10, "4.000"))
+                .build();
+        Check checked = Rules.blendShareCheck(caseOf(nick)).orElseThrow();
+        assertThat(checked.reason().detail()).startsWith("a blend covering 0.250, as wide as its 0.125 ends, of a ");
+        assertThat(Rules.blendShareCheck(caseOf(scratch("0.002", "4.000")))
+                        .orElseThrow()
+                        .reason()
+                        .detail())
+                .doesNotContain("ends");
+    }
+
+    @Test
     void noBlendShareIsCheckedWhereGrindingIsNotAllowed() {
         assertThat(Rules.blendShareCheck(caseOf(dent()))).isEmpty();
     }

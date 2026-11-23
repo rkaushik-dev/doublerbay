@@ -1,5 +1,6 @@
 package io.github.rkaushikdev.doublerbay.repair;
 
+import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.damage.Corrosion;
 import io.github.rkaushikdev.doublerbay.manual.LimitSet;
 import io.github.rkaushikdev.doublerbay.measure.Length;
@@ -30,15 +31,21 @@ public record BlendPlan(
         Taper taper,
         Length residual,
         boolean breachesClad,
-        boolean finishRequired) {
+        boolean finishRequired,
+        Optional<Length> endRadius) {
 
-    /** A plan with every measurement on it. */
+    /** A plan with every measurement on it, whose ends fit inside it. */
     public BlendPlan {
         Objects.requireNonNull(cutDepth, "cutDepth");
         Objects.requireNonNull(along, "along");
         Objects.requireNonNull(around, "around");
         Objects.requireNonNull(taper, "taper");
         Objects.requireNonNull(residual, "residual");
+        Objects.requireNonNull(endRadius, "endRadius");
+        if (endRadius.isPresent()
+                && Length.min(along, around).isLessThan(endRadius.get().times(2))) {
+            throw new BadReading("a blend is at least two end radii across");
+        }
     }
 
     /** The skin the finished blend covers, in square inches to two places. */
@@ -62,11 +69,17 @@ public record BlendPlan(
         return limits.maxArea().isEmpty() || area().compareTo(limits.maxArea().get()) <= 0;
     }
 
-    /** {@code cut 0.005 at 20:1, 2.200 by 0.260, 0.035 left, refinish}, the last part only when it is. */
+    /**
+     * {@code cut 0.005 at 20:1, 2.200 by 0.500, 0.250 ends, 0.035 left, refinish}, the ends only where
+     * the book states a radius and the refinish only when it is needed.
+     */
     @Override
     public String toString() {
-        String head = "cut " + cutDepth.inches().toPlainString() + " at " + taper + ", "
-                + along.inches().toPlainString() + " by " + around.inches().toPlainString() + ", "
+        String size = along.inches().toPlainString() + " by " + around.inches().toPlainString();
+        String ends = endRadius
+                .map(radius -> ", " + radius.inches().toPlainString() + " ends")
+                .orElse("");
+        String head = "cut " + cutDepth.inches().toPlainString() + " at " + taper + ", " + size + ends + ", "
                 + residual.inches().toPlainString() + " left";
         return finishRequired ? head + ", refinish" : head;
     }

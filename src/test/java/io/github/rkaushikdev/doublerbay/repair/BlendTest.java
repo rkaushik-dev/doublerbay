@@ -3,6 +3,7 @@ package io.github.rkaushikdev.doublerbay.repair;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.Refused;
 import io.github.rkaushikdev.doublerbay.assess.Placement;
 import io.github.rkaushikdev.doublerbay.damage.DamageKind;
@@ -16,8 +17,10 @@ import io.github.rkaushikdev.doublerbay.manual.LimitSet;
 import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.measure.Ratio;
+import io.github.rkaushikdev.doublerbay.measure.Taper;
 import io.github.rkaushikdev.doublerbay.support.Sample;
 import java.math.BigDecimal;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class BlendTest {
@@ -189,5 +192,39 @@ class BlendTest {
     @Test
     void aBlendTakingTooMuchOfThePanelDoesNotClearIt() {
         assertThat(clears(scratch("0.003", "30.000"), LimitSet.allowable())).isFalse();
+    }
+
+    @Test
+    void aNarrowScratchIsBlendedTwoEndRadiiAcross() {
+        BlendPlan plan = planned(scratch("0.003", "2.000"));
+        assertThat(plan.endRadius()).contains(inch("0.250"));
+        assertThat(plan.around()).isEqualTo(inch("0.500"));
+        assertThat(plan.along()).isEqualTo(inch("2.200"));
+        assertThat(plan.toString()).contains("2.200 by 0.500, 0.250 ends");
+    }
+
+    @Test
+    void aPlanNarrowerThanItsOwnEndsIsRefused() {
+        assertThatThrownBy(() -> new BlendPlan(
+                        inch("0.005"),
+                        inch("2.000"),
+                        inch("0.300"),
+                        new Taper(20),
+                        inch("0.035"),
+                        false,
+                        false,
+                        Optional.of(inch("0.250"))))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("two end radii across");
+        BlendPlan open = new BlendPlan(
+                inch("0.005"),
+                inch("2.000"),
+                inch("0.300"),
+                new Taper(20),
+                inch("0.035"),
+                false,
+                false,
+                Optional.empty());
+        assertThat(open.toString()).doesNotContain("ends");
     }
 }

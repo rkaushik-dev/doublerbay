@@ -104,9 +104,19 @@ public record CleanupRule(
         return taper.runout(depth);
     }
 
-    /** How much skin the finished blend covers along one axis. */
+    /**
+     * How much skin the finished blend covers along one axis: the damage feathered out both ways, and
+     * never narrower than the cutter its ends are formed with.
+     *
+     * <p>The end radius is what stops a blend leaving a notch of its own. A shallow scratch feathered
+     * at twenty to one is narrower than a quarter inch cutter, and a cutter cannot cut narrower than
+     * itself, so the finished blend is at least two end radii across whatever the feathering says.
+     */
     public Length blendExtent(Length damageExtent, Length depth) {
-        return damageExtent.plus(runout(depth).times(2));
+        Length feathered = damageExtent.plus(runout(depth).times(2));
+        return minEndRadius
+                .map(radius -> Length.max(feathered, radius.times(2)))
+                .orElse(feathered);
     }
 
     /** Whether a blend may happen at all where this damage is sitting. */
@@ -154,13 +164,16 @@ public record CleanupRule(
                 minCutBelow);
     }
 
-    /** {@code blend at 20:1, up to 25.00% of the panel}, or {@code not blendable}. */
+    /** {@code blend at 20:1 with 0.250 ends, up to 25.00% of the panel}, or {@code not blendable}. */
     @Override
     public String toString() {
         if (!blendable) {
             return "not blendable";
         }
-        String head = "blend at " + taper;
+        String head = "blend at " + taper
+                + minEndRadius
+                        .map(radius -> " with " + radius.inches().toPlainString() + " ends")
+                        .orElse("");
         if (maxBlendFraction.isPresent()) {
             head = head + ", up to " + Decimals.text(Decimals.times(maxBlendFraction.get(), 100)) + "% of the panel";
         }
