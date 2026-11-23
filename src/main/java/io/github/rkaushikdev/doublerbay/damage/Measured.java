@@ -3,6 +3,7 @@ package io.github.rkaushikdev.doublerbay.damage;
 import io.github.rkaushikdev.doublerbay.grid.Offset;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.structure.Footprint;
+import java.math.BigDecimal;
 import java.util.Optional;
 
 /**
@@ -19,4 +20,12 @@ public interface Measured {
 
     /** The depth the limit tables read, or nothing for the kinds that have none. */
     Optional<Length> limitDepth();
+
+    /**
+     * The area an area cap reads, in square inches to two places, for the kinds measured as a patch,
+     * and nothing for the kinds measured as a line or a point.
+     */
+    default Optional<BigDecimal> patchArea() {
+        return Optional.empty();
+    }
 }

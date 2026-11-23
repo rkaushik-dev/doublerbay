@@ -94,6 +94,12 @@ public record Corrosion(Length along, Length around, Length worstDepth, boolean 
         return Footprint.square(centre, along, around);
     }
 
+    /** A patch, read by its area. */
+    @Override
+    public Optional<BigDecimal> patchArea() {
+        return Optional.of(area());
+    }
+
     /** The worst pit, which is the only depth corrosion is judged on. */
     @Override
     public Optional<Length> limitDepth() {

@@ -2,11 +2,13 @@ package io.github.rkaushikdev.doublerbay.assess;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.rkaushikdev.doublerbay.damage.Buckle;
 import io.github.rkaushikdev.doublerbay.damage.Corrosion;
 import io.github.rkaushikdev.doublerbay.damage.Crack;
 import io.github.rkaushikdev.doublerbay.damage.DamageKind;
 import io.github.rkaushikdev.doublerbay.damage.DamageOrigin;
 import io.github.rkaushikdev.doublerbay.damage.Dent;
+import io.github.rkaushikdev.doublerbay.damage.Disbond;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
 import io.github.rkaushikdev.doublerbay.damage.LightningBurn;
 import io.github.rkaushikdev.doublerbay.damage.Scoring;
@@ -471,6 +473,72 @@ class RulesTest {
                 .at(Sample.lowerWingPoint())
                 .build();
         assertThat(Rules.overTheMemberCheck(caseOf(onTheWing))).isEmpty();
+    }
+
+    private static Finding disbond(boolean tapped, boolean toAnEdge) {
+        return Sample.cardWith()
+                .kind(DamageKind.DISBOND)
+                .geometry(new Disbond(inch("3.000"), inch("2.000"), tapped, toAnEdge))
+                .at(Sample.cabinPointOn(10, "4.000"))
+                .build();
+    }
+
+    private static Finding buckle(boolean permanent) {
+        return Sample.cardWith()
+                .kind(DamageKind.BUCKLE)
+                .geometry(new Buckle(inch("6.000"), inch("0.120"), Angle.ofDegrees(90), permanent))
+                .at(Sample.cabinPointOn(10, "4.000"))
+                .build();
+    }
+
+    @Test
+    void aTappedOutDisbondClearOfAnyEdgeHasAKnownExtent() {
+        Check checked = Rules.extentCheck(caseOf(disbond(true, false))).orElseThrow();
+        assertThat(checked.passed()).isTrue();
+        assertThat(checked.reason().detail()).isEqualTo("tapped out to 6.00 sq in");
+    }
+
+    @Test
+    void aDisbondNobodyTappedOutWaitsForItsEdgeToBeFound() {
+        Check checked = Rules.extentCheck(caseOf(disbond(false, false))).orElseThrow();
+        assertThat(checked.passed()).isFalse();
+        assertThat(checked.outcome()).isSameAs(Disposition.REPAIRABLE);
+        assertThat(checked.reason().detail()).startsWith("not tapped out");
+    }
+
+    @Test
+    void aDisbondRunningToAFreeEdgeGoesToTheManufacturerTappedOrNot() {
+        for (boolean tapped : new boolean[] {true, false}) {
+            Check checked = Rules.extentCheck(caseOf(disbond(tapped, true))).orElseThrow();
+            assertThat(checked.passed()).isFalse();
+            assertThat(checked.outcome()).isSameAs(Disposition.OUT_OF_LIMITS);
+            assertThat(checked.reason().detail()).contains("free edge");
+        }
+    }
+
+    @Test
+    void aBuckleIsConfirmedPermanentBeforeAnybodyCutsMetalForIt() {
+        Check unconfirmed = Rules.extentCheck(caseOf(buckle(false))).orElseThrow();
+        assertThat(unconfirmed.passed()).isFalse();
+        assertThat(unconfirmed.outcome()).isSameAs(Disposition.REPAIRABLE);
+        assertThat(unconfirmed.reason().detail()).contains("oil canning");
+        assertThat(Rules.extentCheck(caseOf(buckle(true))).orElseThrow().passed())
+                .isTrue();
+    }
+
+    @Test
+    void theExtentRuleStandsAsideForKindsWithALimitTable() {
+        assertThat(Rules.extentCheck(caseOf(scratch()))).isEmpty();
+        assertThat(Rules.extentCheck(caseOf(dent()))).isEmpty();
+    }
+
+    @Test
+    void onlyThePatchKindsCarryAnAreaForTheAreaCap() {
+        assertThat(disbond(true, false).geometry().patchArea()).contains(new BigDecimal("6.00"));
+        assertThat(rot().geometry().patchArea()).contains(new BigDecimal("2.00"));
+        assertThat(strike(1, false).geometry().patchArea()).contains(new BigDecimal("1.00"));
+        assertThat(dent().geometry().patchArea()).isEmpty();
+        assertThat(buckle(true).geometry().patchArea()).isEmpty();
     }
 
     @Test

@@ -86,6 +86,12 @@ public record LightningBurn(
         return Footprint.square(centre, along, around);
     }
 
+    /** A patch, read by its area. */
+    @Override
+    public Optional<BigDecimal> patchArea() {
+        return Optional.of(area());
+    }
+
     /** The deepest pit in the attachment area. */
     @Override
     public Optional<Length> limitDepth() {

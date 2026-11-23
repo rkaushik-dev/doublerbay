@@ -37,6 +37,12 @@ public record Disbond(Length along, Length around, boolean tapTested, boolean re
         return Corrosion.squareInches(along, around);
     }
 
+    /** A patch, read by its area. */
+    @Override
+    public Optional<BigDecimal> patchArea() {
+        return Optional.of(area());
+    }
+
     /** No depth reads off this, a disbond is an area and nothing else. */
     @Override
     public Optional<Length> limitDepth() {

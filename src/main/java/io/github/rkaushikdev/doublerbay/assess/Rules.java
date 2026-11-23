@@ -1,5 +1,6 @@
 package io.github.rkaushikdev.doublerbay.assess;
 
+import io.github.rkaushikdev.doublerbay.damage.Buckle;
 import io.github.rkaushikdev.doublerbay.damage.Corrosion;
 import io.github.rkaushikdev.doublerbay.damage.Crack;
 import io.github.rkaushikdev.doublerbay.damage.Dent;
@@ -46,6 +47,7 @@ public final class Rules {
             Rules::areaCheck,
             Rules::exfoliationCheck,
             Rules::strikeCheck,
+            Rules::extentCheck,
             Rules::edgeMarginCheck,
             Rules::blendShareCheck);
 
@@ -224,22 +226,47 @@ public final class Rules {
     /** Area against the cap, for the kinds measured as a patch. */
     public static Optional<Check> areaCheck(Case held) {
         Optional<BigDecimal> cap = held.limits().maxArea();
-        if (cap.isEmpty()) {
-            return Optional.empty();
-        }
-        Optional<BigDecimal> area = patchArea(held.finding().geometry());
-        if (area.isEmpty()) {
+        Optional<BigDecimal> area = held.finding().geometry().patchArea();
+        if (cap.isEmpty() || area.isEmpty()) {
             return Optional.empty();
         }
         String detail = Decimals.text(area.get()) + " sq in against a cap of " + Decimals.text(cap.get());
         return answer(area.get().compareTo(cap.get()) <= 0, "area", detail, Disposition.REPAIRABLE);
     }
 
-    private static Optional<BigDecimal> patchArea(Geometry geometry) {
-        return switch (geometry) {
-            case Corrosion corrosion -> Optional.of(corrosion.area());
-            case Disbond disbond -> Optional.of(disbond.area());
-            case LightningBurn burn -> Optional.of(burn.area());
+    /**
+     * Whether the damage the repair has to cover is known to be the size it was reported as.
+     *
+     * <p>Disbonds and buckles have no limit table, so the answer is always a repair, and what the
+     * engineer needs from the card is whether a repair can be drawn to it. A disbond nobody tapped out
+     * has an edge nobody found, so the repair waits for the tap test. One that runs to a free edge has
+     * nothing holding it from growing out of the panel, and the book does not cover it. A buckle not
+     * confirmed as permanent may be a panel oil canning on a warm day, and is confirmed before anybody
+     * cuts metal for it.
+     */
+    public static Optional<Check> extentCheck(Case held) {
+        return switch (held.finding().geometry()) {
+            case Disbond disbond
+            when disbond.canSpread() ->
+                answer(
+                        false,
+                        "extent",
+                        "the disbond runs to a free edge with nothing to stop it",
+                        Disposition.OUT_OF_LIMITS);
+            case Disbond disbond ->
+                flag(
+                        "extent",
+                        !disbond.isBounded(),
+                        "tapped out to " + Decimals.text(disbond.area()) + " sq in",
+                        "not tapped out, so the repair waits for the edge of the disbond to be found",
+                        Disposition.REPAIRABLE);
+            case Buckle buckle ->
+                flag(
+                        "extent",
+                        buckle.isOilCanning(),
+                        "confirmed permanent",
+                        "not confirmed permanent, and may be the panel oil canning",
+                        Disposition.REPAIRABLE);
             default -> Optional.empty();
         };
     }
