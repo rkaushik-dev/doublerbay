@@ -287,6 +287,7 @@ class GrowthRoutesTest {
         assertThat(body.get("basis").asText()).isEqualTo("critical 6.000, 0.100 per 1000 FC");
         assertThat(body.get("fast").asBoolean()).isTrue();
         assertThat(body.get("outgrows_the_basis").asBoolean()).isFalse();
+        assertThat(body.get("repeat_at_measured_rate").isNull()).isTrue();
     }
 
     @Test
@@ -294,12 +295,9 @@ class GrowthRoutesTest {
         Built built = built();
         String reference = raiseCrack(built.database());
         measure(built.api(), reference, "0.900", 14800);
-        assertThat(built.api()
-                        .get("/growth/" + reference)
-                        .json()
-                        .get("outgrows_the_basis")
-                        .asBoolean())
-                .isTrue();
+        JsonNode card = built.api().get("/growth/" + reference).json();
+        assertThat(card.get("outgrows_the_basis").asBoolean()).isTrue();
+        assertThat(card.get("repeat_at_measured_rate").asText()).isEqualTo("every 5350 FC");
         JsonNode fleet = built.api().get("/growth?on=2025-06-01").json();
         assertThat(fleet.get("fast").get(0).get("outgrows_the_basis").asBoolean())
                 .isTrue();
@@ -318,5 +316,26 @@ class GrowthRoutesTest {
         JsonNode body =
                 built.api().get("/growth/" + raiseCrack(built.database())).json();
         assertThat(body.get("outgrows_the_basis").asBoolean()).isFalse();
+    }
+
+    @Test
+    void aTailConeCrackUnderTheFastLineIsStillListedWhenItOutgrowsItsAnalysis() {
+        Built built = built();
+        UnitOfWork.run(built.database(), unit -> unit.findings()
+                .raiseFinding(Sample.cardWith()
+                        .sequence(3)
+                        .kind(DamageKind.CRACK)
+                        .geometry(crack("0.400"))
+                        .at(Sample.cabinPointAtFrame(50, 10))
+                        .origin(DamageOrigin.FATIGUE)
+                        .build()));
+        String reference = new FindingId(2025, 3).toString();
+        measure(built.api(), reference, "0.440", 14800);
+        JsonNode card = built.api().get("/growth/" + reference).json();
+        assertThat(card.get("fast").asBoolean()).isFalse();
+        assertThat(card.get("basis").asText()).isEqualTo("critical 8.000, 0.040 per 1000 FC");
+        assertThat(card.get("outgrows_the_basis").asBoolean()).isTrue();
+        JsonNode fleet = built.api().get("/growth?on=2025-06-01").json();
+        assertThat(references(fleet.get("fast"))).containsExactly(reference);
     }
 }

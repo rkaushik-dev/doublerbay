@@ -5,6 +5,7 @@ import io.github.rkaushikdev.doublerbay.measure.Cycles;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.util.Decimals;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 /**
@@ -23,6 +24,21 @@ public record GrowthBasis(Length critical, Length growthPerThousand) {
         if (growthPerThousand.mils() <= 0) {
             throw new BadReading("a crack that does not grow needs no inspection");
         }
+    }
+
+    /**
+     * The same structure with a crack growing at a rate somebody measured, in inches per thousand
+     * cycles, rounded up to the next thousandth so the measured rate is never read as slower than it was.
+     *
+     * @throws BadReading for a rate that is not growth
+     */
+    public GrowthBasis atMeasuredRate(BigDecimal inchesPerThousand) {
+        if (inchesPerThousand.signum() <= 0) {
+            throw new BadReading("a measured rate of " + inchesPerThousand.toPlainString() + " is not growth");
+        }
+        BigDecimal mils =
+                Decimals.times(inchesPerThousand, Length.MILS_PER_INCH).setScale(0, RoundingMode.CEILING);
+        return new GrowthBasis(critical, new Length(mils.intValueExact()));
     }
 
     /** What the analysis says a crack here grows, in inches per thousand cycles. */

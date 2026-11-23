@@ -13,6 +13,7 @@ import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.measure.Usage;
 import io.github.rkaushikdev.doublerbay.repair.RepairCategory;
 import io.github.rkaushikdev.doublerbay.structure.PanelKind;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
@@ -201,5 +202,26 @@ class ScheduleTest {
     void aPermanentRepairStillCarriesNothing() {
         assertThat(Schedules.scheduleFor(RepairCategory.A, PanelKind.WING_LOWER, InspectionMethod.HFEC))
                 .isEmpty();
+    }
+
+    @Test
+    void theRepeatAMethodBuysComesOffTheBasisItIsRunAgainst() {
+        GrowthBasis pressurised = Schedules.basisFor(PanelKind.PRESSURISED_SKIN);
+        assertThat(Schedules.repeatFor(pressurised, InspectionMethod.HFEC)).contains(new Cycles(29750));
+        assertThat(Schedules.repeatFor(pressurised.atMeasuredRate(new BigDecimal("0.5")), InspectionMethod.HFEC))
+                .contains(new Cycles(5950));
+        GrowthBasis tight = new GrowthBasis(inch("0.051"), inch("1.000"));
+        assertThat(Schedules.repeatFor(tight, InspectionMethod.HFEC)).isEmpty();
+    }
+
+    @Test
+    void aMeasuredRateIsNeverReadAsSlowerThanItWas() {
+        GrowthBasis measured = Schedules.basisFor(PanelKind.WING_LOWER).atMeasuredRate(new BigDecimal("0.0754"));
+        assertThat(measured.growthPerThousand()).isEqualTo(inch("0.076"));
+        assertThat(measured.critical())
+                .isEqualTo(Schedules.basisFor(PanelKind.WING_LOWER).critical());
+        assertThatThrownBy(() -> Schedules.basisFor(PanelKind.WING_LOWER).atMeasuredRate(BigDecimal.ZERO))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("is not growth");
     }
 }

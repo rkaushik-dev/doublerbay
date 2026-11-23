@@ -15,6 +15,8 @@ import java.util.Optional;
  * @param fast whether that is fast enough for somebody to look at the programme
  * @param basis what the analysis says a crack grows where this one is, when there is data for it
  * @param outgrowsTheBasis whether the worst measured stretch is quicker than that
+ * @param repeatAtMeasuredRate the eddy current repeat the worst measured rate would set, once it
+ *     outgrows the basis
  * @param steps every stretch between two readings, oldest first
  */
 public record GrowthOut(
@@ -27,6 +29,7 @@ public record GrowthOut(
         boolean fast,
         Optional<String> basis,
         boolean outgrowsTheBasis,
+        Optional<String> repeatAtMeasuredRate,
         List<StepOut> steps) {
 
     public GrowthOut {

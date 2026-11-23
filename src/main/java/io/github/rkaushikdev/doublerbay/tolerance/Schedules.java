@@ -123,13 +123,23 @@ public final class Schedules {
         };
     }
 
+    /**
+     * The repeat a method buys against a crack growth basis: the flying between what the method finds
+     * and critical, over the safety factor, or nothing when that leaves no room at all.
+     *
+     * <p>Run against a basis at a rate somebody measured, this is the interval the programme should
+     * have been set on, which is what an engineer takes to the programme review.
+     */
+    public static Optional<Cycles> repeatFor(GrowthBasis basis, InspectionMethod method) {
+        Cycles growth = basis.growthCycles(method.findsDownTo());
+        Cycles repeat = new Cycles(Math.floorDiv(growth.count(), SAFETY_FACTOR));
+        return repeat.count() < 1 ? Optional.empty() : Optional.of(repeat);
+    }
+
     /** The repeating programme an inspected repair carries, off the crack growth basis for the skin. */
     private static InspectionSchedule repeating(PanelKind kind, InspectionMethod method) {
-        Cycles growth = basisFor(kind).growthCycles(method.findsDownTo());
-        Cycles repeat = new Cycles(Math.floorDiv(growth.count(), SAFETY_FACTOR));
-        if (repeat.count() < 1) {
-            throw new BadReading(method + " leaves no room for a repeat interval on " + kind);
-        }
+        Cycles repeat = repeatFor(basisFor(kind), method)
+                .orElseThrow(() -> new BadReading(method + " leaves no room for a repeat interval on " + kind));
         return InspectionSchedule.of(
                 method, Interval.ofCycles(new Cycles(repeat.count() * THRESHOLD_FACTOR)), Interval.ofCycles(repeat));
     }

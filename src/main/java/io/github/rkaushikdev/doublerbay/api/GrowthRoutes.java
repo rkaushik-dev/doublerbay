@@ -10,6 +10,7 @@ import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.ids.Serial;
 import io.github.rkaushikdev.doublerbay.report.Growth;
 import io.github.rkaushikdev.doublerbay.report.Step;
+import io.github.rkaushikdev.doublerbay.service.Repairs;
 import io.github.rkaushikdev.doublerbay.store.StoreContext;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import io.github.rkaushikdev.doublerbay.structure.PanelKind;
@@ -64,7 +65,10 @@ final class GrowthRoutes {
     }
 
     @GetMapping("/growth")
-    @Operation(summary = "Every crack on the fleet growing faster than the programme expects.")
+    @Operation(
+            summary = "Every crack on the fleet growing faster than the programme expects.",
+            description = "A crack is listed when its worst measured rate is past the desk's fast line, or past"
+                    + " the analysis for the skin it is in, which on the tail cone is the slower of the two.")
     FleetGrowthOut fleetGrowth(@RequestParam(name = "on") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate on) {
         Tracked found = deps.apply(unit -> {
             List<Finding> tracked = unit.findings().ofKind(DamageKind.CRACK);
@@ -77,8 +81,12 @@ final class GrowthRoutes {
                     continue;
                 }
                 Optional<BigDecimal> worst = built.worstRate();
-                if (worst.isPresent() && worst.get().compareTo(FAST) > 0) {
-                    rated.add(new Rated(growthOut(unit, built), worst.get()));
+                if (worst.isEmpty()) {
+                    continue;
+                }
+                GrowthOut out = growthOut(unit, built);
+                if (out.fast() || out.outgrowsTheBasis()) {
+                    rated.add(new Rated(out, worst.get()));
                 }
             }
             return new Tracked(tracked.size(), rated);
@@ -152,6 +160,10 @@ final class GrowthRoutes {
     GrowthOut growthOut(UnitOfWork unit, Growth built) {
         Optional<BigDecimal> worst = built.worstRate();
         Optional<GrowthBasis> basis = basisUnder(unit, built.reference());
+        Optional<GrowthBasis> outgrown = basis.filter(built::outgrows);
+        Optional<String> repeat = outgrown.flatMap(
+                found -> Schedules.repeatFor(found.atMeasuredRate(worst.orElseThrow()), Repairs.DEFAULT_METHOD)
+                        .map(cycles -> "every " + cycles));
         return new GrowthOut(
                 built.reference().toString(),
                 built.readings(),
@@ -161,7 +173,8 @@ final class GrowthRoutes {
                 built.worstRateText(),
                 worst.isPresent() && worst.get().compareTo(FAST) > 0,
                 basis.map(GrowthBasis::toString),
-                basis.filter(built::outgrows).isPresent(),
+                outgrown.isPresent(),
+                repeat,
                 built.steps().stream().map(GrowthRoutes::stepOut).toList());
     }
 
