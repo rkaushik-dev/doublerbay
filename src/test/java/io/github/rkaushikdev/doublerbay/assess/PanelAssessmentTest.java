@@ -3,11 +3,16 @@ package io.github.rkaushikdev.doublerbay.assess;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.rkaushikdev.doublerbay.damage.DamageKind;
 import io.github.rkaushikdev.doublerbay.damage.Dent;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
+import io.github.rkaushikdev.doublerbay.damage.Scoring;
 import io.github.rkaushikdev.doublerbay.manual.Book;
+import io.github.rkaushikdev.doublerbay.manual.Cleanups;
+import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.support.Sample;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -178,5 +183,50 @@ class PanelAssessmentTest {
                 BOOK, Sample.tailContext(), List.of(smallDent(1, "2.000"), smallDent(2, "16.000")));
         assertThat(panels).hasSize(1);
         assertThat(panels.get(0).cardCount()).isEqualTo(2);
+    }
+
+    private static Finding scoreToBlend(int sequence, String aft, String length) {
+        return Sample.cardWith()
+                .sequence(sequence)
+                .kind(DamageKind.SCRATCH)
+                .geometry(new Scoring(inch("0.002"), inch(length), inch("0.060"), Angle.ofDegrees(90)))
+                .at(Sample.cabinPoint(15, aft, 10, "4.000"))
+                .build();
+    }
+
+    @Test
+    void oneBlendOnAPanelIsLeftToItsOwnShareCheck() {
+        Assessment alone =
+                panel(scoreToBlend(1, "10.000", "2.000")).assessments().get(0);
+        assertThat(alone.disposition()).isSameAs(Disposition.REWORKABLE);
+        assertThat(rules(alone)).doesNotContain("panel blends");
+    }
+
+    @Test
+    void theBlendsOnOnePanelAreAddedUpAgainstTheShareTheBookAllows() {
+        PanelAssessment two = panel(scoreToBlend(1, "2.000", "2.000"), scoreToBlend(2, "18.000", "2.000"));
+        assertThat(two.assessments()).allSatisfy(one -> {
+            Reason blends = reasonNamed(one, "panel blends");
+            assertThat(blends.passed()).isTrue();
+            assertThat(blends.detail()).startsWith("2 blends take ").endsWith(" against 0.25");
+            assertThat(one.disposition()).isSameAs(Disposition.REWORKABLE);
+        });
+    }
+
+    @Test
+    void blendsThatEachFitButTogetherDoNotAllGoToARepair() {
+        Finding first = scoreToBlend(1, "2.000", "6.000");
+        Placement placed = Placement.place(Sample.tailContext(), first);
+        Length each = Cleanups.standardRules().forKind(DamageKind.SCRATCH).blendExtent(inch("6.000"), inch("0.002"));
+        assertThat(each.times(2).isGreaterThan(placed.panelExtent().times(new BigDecimal("0.25"))))
+                .isTrue();
+        assertThat(each.isAtMost(placed.panelExtent().times(new BigDecimal("0.25"))))
+                .isTrue();
+        PanelAssessment both = panel(first, scoreToBlend(2, "18.000", "6.000"));
+        assertThat(both.assessments()).allSatisfy(one -> {
+            assertThat(reasonNamed(one, "panel blends").passed()).isFalse();
+            assertThat(one.disposition()).isSameAs(Disposition.REPAIRABLE);
+            assertThat(reasonNamed(one, "blend share").passed()).isTrue();
+        });
     }
 }

@@ -10,7 +10,12 @@ import io.github.rkaushikdev.doublerbay.grid.WingPoint;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.ids.PanelId;
 import io.github.rkaushikdev.doublerbay.manual.Book;
+import io.github.rkaushikdev.doublerbay.manual.CleanupRule;
+import io.github.rkaushikdev.doublerbay.manual.CleanupRules;
 import io.github.rkaushikdev.doublerbay.manual.CountLimits;
+import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.util.Decimals;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -23,14 +28,16 @@ import java.util.Objects;
  * Every card on one panel, assessed together, which is not the same as assessing the cards on it one
  * at a time.
  *
- * <p>Three of the book's rules only exist once every card on the panel is on the table at once. Two
+ * <p>Four of the book's rules only exist once every card on the panel is on the table at once. Two
  * damages inside a clear separation are one damage. A bay holds so many and no more. A panel holds so
- * many and no more. A desk working card by card passes all three without ever seeing them.
+ * many and no more. And the blends on one panel take their share of it between them, so two blends
+ * that each take a fifth of a panel take two fifths. A desk working card by card passes all four
+ * without ever seeing them.
  *
  * <p>The order matters and it is the order the book states. Cluster first, because clustering
  * changes how many damages there are, and a panel with eight cards on it may be over the panel count
  * at eight and inside it at five once three of them have been taken together. Then count the bays,
- * then count the panel.
+ * then count the panel, then add up the blends.
  *
  * <p>What comes out is the per card answer raised where a panel rule bit it, with the panel rule in
  * that card's own trail. A card that was allowable on its own and is not once its neighbours are
@@ -90,19 +97,16 @@ public record PanelAssessment(PanelId part, List<Assessment> assessments, List<C
             throw new IllegalArgumentException("a panel assessment needs at least one card");
         }
 
-        Finding opening = findings.get(0);
-        Assessment first = Assessor.assess(book, tail, opening);
-        PanelId part = first.placement().part();
+        PanelId part = null;
         Map<FindingId, Assessment> answers = new LinkedHashMap<>();
-        answers.put(opening.reference(), first);
         List<Placed> placed = new ArrayList<>();
-        placed.add(new Placed(opening, first.placement().centre()));
         Map<FindingId, String> bays = new LinkedHashMap<>();
-        bays.put(opening.reference(), bayKey(tail, opening));
 
-        for (Finding finding : findings.subList(1, findings.size())) {
+        for (Finding finding : findings) {
             Assessment one = Assessor.assess(book, tail, finding);
-            if (!one.placement().part().equals(part)) {
+            if (part == null) {
+                part = one.placement().part();
+            } else if (!one.placement().part().equals(part)) {
                 throw new IllegalArgumentException(finding.reference() + " is not on " + part);
             }
             answers.put(finding.reference(), one);
@@ -116,6 +120,7 @@ public record PanelAssessment(PanelId part, List<Assessment> assessments, List<C
         clusterReasons(answers, groups, counts);
         bayReasons(answers, perBay(bays), bays, counts);
         panelReasons(answers, part, groups.size(), counts);
+        blendReasons(answers, part, book.cleanup());
 
         List<Assessment> ordered = findings.stream()
                 .map(finding -> answers.get(finding.reference()))
@@ -162,6 +167,11 @@ public record PanelAssessment(PanelId part, List<Assessment> assessments, List<C
         return counted;
     }
 
+    /** Put a panel rule into a card's own trail, raising the card to a repair when it was over. */
+    private static Assessment counted(Assessment one, String rule, String detail, boolean over) {
+        return raiseWith(one, new Reason(rule, detail, !over), over ? Disposition.REPAIRABLE : Disposition.ALLOWABLE);
+    }
+
     /** Put a panel rule into a card's own trail, and raise its answer if it bit. */
     private static Assessment raiseWith(Assessment one, Reason reason, Disposition to) {
         Verdict verdict = one.verdict().withReason(reason);
@@ -179,13 +189,8 @@ public record PanelAssessment(PanelId part, List<Assessment> assessments, List<C
             String detail = "assessed with " + (group.size() - 1) + " other damage inside the clear separation";
             boolean over = counts.clusterExceeded(group.size());
             for (Placed member : group.members()) {
-                FindingId reference = member.finding().reference();
-                answers.put(
-                        reference,
-                        raiseWith(
-                                answers.get(reference),
-                                new Reason("group", detail, !over),
-                                over ? Disposition.REPAIRABLE : Disposition.ALLOWABLE));
+                answers.computeIfPresent(
+                        member.finding().reference(), (reference, one) -> counted(one, "group", detail, over));
             }
         }
     }
@@ -201,16 +206,9 @@ public record PanelAssessment(PanelId part, List<Assessment> assessments, List<C
         int limit = counts.perBay().get();
         for (Map.Entry<FindingId, String> entry : bays.entrySet()) {
             int found = perBay.get(entry.getValue());
-            boolean over = counts.bayExceeded(found);
-            answers.put(
-                    entry.getKey(),
-                    raiseWith(
-                            answers.get(entry.getKey()),
-                            new Reason(
-                                    "bay count",
-                                    found + " in " + entry.getValue() + " against a limit of " + limit,
-                                    !over),
-                            over ? Disposition.REPAIRABLE : Disposition.ALLOWABLE));
+            String detail = found + " in " + entry.getValue() + " against a limit of " + limit;
+            answers.computeIfPresent(
+                    entry.getKey(), (reference, one) -> counted(one, "bay count", detail, counts.bayExceeded(found)));
         }
     }
 
@@ -222,7 +220,42 @@ public record PanelAssessment(PanelId part, List<Assessment> assessments, List<C
         boolean over = counts.panelExceeded(damages);
         String detail = damages + " on " + part + " against a limit of "
                 + counts.perPanel().get();
-        answers.replaceAll((reference, one) -> raiseWith(
-                one, new Reason("panel count", detail, !over), over ? Disposition.REPAIRABLE : Disposition.ALLOWABLE));
+        answers.replaceAll((reference, one) -> counted(one, "panel count", detail, over));
+    }
+
+    /**
+     * Add up what the blends on the panel take of it, once there is more than one.
+     *
+     * <p>Each card's own blend share check reads its blend against the panel alone. Here the blends
+     * waiting to be done on the panel are added together, and the share the tightest of their rules
+     * allows is what they are held to between them. Over it, every one of them goes to a repair: which
+     * blend to swap for a doubler is an engineer's call, not the order the cards were raised in.
+     */
+    private static void blendReasons(Map<FindingId, Assessment> answers, PanelId part, CleanupRules cleanups) {
+        List<Assessment> blends = answers.values().stream()
+                .filter(one -> one.disposition() == Disposition.REWORKABLE)
+                .toList();
+        if (blends.size() < 2) {
+            return;
+        }
+        Length panel = blends.get(0).placement().panelExtent();
+        Length covered = new Length(0);
+        BigDecimal allowed = BigDecimal.ONE;
+        for (Assessment one : blends) {
+            CleanupRule rule = cleanups.forKind(one.finding().kind());
+            Length depth = one.finding().governingDepth();
+            Length extent = one.finding().footprint(one.placement().centre()).longerSide();
+            covered = covered.plus(rule.blendExtent(extent, depth));
+            allowed = allowed.min(rule.maxBlendFraction().orElse(BigDecimal.ONE));
+        }
+        BigDecimal share = Decimals.over(BigDecimal.valueOf(covered.mils()), BigDecimal.valueOf(panel.mils()));
+        boolean over = share.compareTo(allowed) > 0;
+        String detail =
+                blends.size() + " blends take " + Decimals.quantize(share, 2).toPlainString() + " of " + part
+                        + " against " + Decimals.quantize(allowed, 2).toPlainString();
+        for (Assessment one : blends) {
+            answers.computeIfPresent(
+                    one.finding().reference(), (reference, held) -> counted(held, "panel blends", detail, over));
+        }
     }
 }
