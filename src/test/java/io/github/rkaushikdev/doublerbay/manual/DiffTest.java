@@ -10,7 +10,6 @@ import io.github.rkaushikdev.doublerbay.structure.PanelKind;
 import io.github.rkaushikdev.doublerbay.v320.Manual53;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class DiffTest {
@@ -181,9 +180,11 @@ class DiffTest {
     void theRealCampaignRevisionShowsUpAsATightening() {
         RevisionDiff found = Diffs.diffTables(Manual53.allowableDamage(11), Manual53.allowableDamage(12));
         List<LimitChange> tightened = found.tightenings();
-        assertThat(tightened).isNotEmpty();
+        assertThat(tightened).hasSize(4);
         assertThat(tightened).allSatisfy(change -> assertThat(change.key().panelKind())
-                .isEqualTo(Optional.of(PanelKind.PRESSURISED_SKIN)));
+                .hasValueSatisfying(skin -> assertThat(Manual53.PRESSURE_SKINS).contains(skin)));
+        assertThat(tightened.stream().map(change -> change.key().panelKind().orElseThrow()))
+                .containsOnly(PanelKind.PRESSURISED_SKIN, PanelKind.BELLY_SKIN);
         assertThat(found.loosenings()).isEmpty();
     }
 

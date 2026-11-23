@@ -91,6 +91,13 @@ public final class Manual53 {
     /** The taper a blend runs out at on barrel skin. */
     public static final Taper BLEND = new Taper(20);
 
+    /**
+     * The skins the pressurised material loss rows are written for. The belly holds cabin pressure
+     * like the barrel sides do, and read against the any skin row it was getting twice the depth the
+     * pressure boundary allows.
+     */
+    public static final List<PanelKind> PRESSURE_SKINS = List.of(PanelKind.PRESSURISED_SKIN, PanelKind.BELLY_SKIN);
+
     /** Where nothing is allowable whatever it measures. */
     public static final List<Region> NOTHING_ALLOWED_IN =
             List.of(Region.FASTENER_ROW, Region.CUTOUT_CORNER, Region.CHEM_MILL_STEP);
@@ -143,39 +150,41 @@ public final class Manual53 {
                 .toList();
     }
 
+    /**
+     * One kind of skin's dent limits as the page writes them: the depth and the sharpness before the
+     * campaign revision and from it on. A skin the campaign did not touch carries the same both times,
+     * and a null skin is the row for any skin the page names no row for.
+     */
+    private record Dents(
+            PanelKind skin, String depth, String sharpness, String campaignDepth, String campaignSharpness) {
+
+        Dents(PanelKind skin, String depth, String sharpness) {
+            this(skin, depth, sharpness, depth, sharpness);
+        }
+
+        LimitRow row(int revision) {
+            boolean campaign = revision >= DENT_CAMPAIGN_REVISION;
+            return new LimitRow(
+                    LimitKey.of(DamageKind.DENT, skin, null),
+                    LimitSet.allowable()
+                            .withMaxDepth(inches(campaign ? campaignDepth : depth))
+                            .withMaxSharpness(new Ratio(campaign ? campaignSharpness : sharpness))
+                            .withMinEdgeMarginDiameters(TWO_DIAMETERS),
+                    DEFORMATION);
+        }
+    }
+
+    /** The dent table, any skin first. The belly holds pressure and takes the pressurised numbers. */
+    private static final List<Dents> DENTS = List.of(
+            new Dents(null, "0.100", "0.10"),
+            new Dents(PanelKind.PRESSURISED_SKIN, "0.080", "0.08", "0.060", "0.05"),
+            new Dents(PanelKind.BELLY_SKIN, "0.080", "0.08", "0.060", "0.05"),
+            new Dents(PanelKind.CROWN_SKIN, "0.080", "0.08"),
+            new Dents(PanelKind.UNPRESSURISED_SKIN, "0.150", "0.15"));
+
     private static List<LimitRow> dentRows(int revision) {
-        boolean campaign = revision >= DENT_CAMPAIGN_REVISION;
-        String pressurisedDepth = campaign ? "0.060" : "0.080";
-        String pressurisedSharpness = campaign ? "0.05" : "0.08";
         List<LimitRow> rows = new ArrayList<>();
-        rows.add(new LimitRow(
-                new LimitKey(DamageKind.DENT),
-                LimitSet.allowable()
-                        .withMaxDepth(inches("0.100"))
-                        .withMaxSharpness(new Ratio("0.10"))
-                        .withMinEdgeMarginDiameters(TWO_DIAMETERS),
-                DEFORMATION));
-        rows.add(new LimitRow(
-                new LimitKey(DamageKind.DENT, PanelKind.PRESSURISED_SKIN),
-                LimitSet.allowable()
-                        .withMaxDepth(inches(pressurisedDepth))
-                        .withMaxSharpness(new Ratio(pressurisedSharpness))
-                        .withMinEdgeMarginDiameters(TWO_DIAMETERS),
-                DEFORMATION));
-        rows.add(new LimitRow(
-                new LimitKey(DamageKind.DENT, PanelKind.CROWN_SKIN),
-                LimitSet.allowable()
-                        .withMaxDepth(inches("0.080"))
-                        .withMaxSharpness(new Ratio("0.08"))
-                        .withMinEdgeMarginDiameters(TWO_DIAMETERS),
-                DEFORMATION));
-        rows.add(new LimitRow(
-                new LimitKey(DamageKind.DENT, PanelKind.UNPRESSURISED_SKIN),
-                LimitSet.allowable()
-                        .withMaxDepth(inches("0.150"))
-                        .withMaxSharpness(new Ratio("0.15"))
-                        .withMinEdgeMarginDiameters(TWO_DIAMETERS),
-                DEFORMATION));
+        DENTS.forEach(dents -> rows.add(dents.row(revision)));
         rows.addAll(nothingIn(DamageKind.DENT, DEFORMATION));
         return rows;
     }
@@ -197,15 +206,17 @@ public final class Manual53 {
                             .withMinEdgeMarginDiameters(TWO_DIAMETERS)
                             .withBlendTaper(BLEND),
                     MATERIAL_LOSS));
-            rows.add(new LimitRow(
-                    new LimitKey(score.kind(), PanelKind.PRESSURISED_SKIN),
-                    LimitSet.allowable()
-                            .withMaxDepthFraction(new Ratio("0.05"))
-                            .withAcrossLoadShare(ACROSS_LOAD_SHARE)
-                            .withMinResidualFraction(new Ratio("0.85"))
-                            .withMinEdgeMarginDiameters(TWO_DIAMETERS)
-                            .withBlendTaper(BLEND),
-                    MATERIAL_LOSS));
+            for (PanelKind skin : PRESSURE_SKINS) {
+                rows.add(new LimitRow(
+                        new LimitKey(score.kind(), skin),
+                        LimitSet.allowable()
+                                .withMaxDepthFraction(new Ratio("0.05"))
+                                .withAcrossLoadShare(ACROSS_LOAD_SHARE)
+                                .withMinResidualFraction(new Ratio("0.85"))
+                                .withMinEdgeMarginDiameters(TWO_DIAMETERS)
+                                .withBlendTaper(BLEND),
+                        MATERIAL_LOSS));
+            }
             rows.addAll(nothingIn(score.kind(), MATERIAL_LOSS));
         }
         return rows;
@@ -221,14 +232,16 @@ public final class Manual53 {
                         .withMaxArea(new BigDecimal("6.00"))
                         .withBlendTaper(new Taper(30)),
                 CORROSION_PAGE));
-        rows.add(new LimitRow(
-                new LimitKey(DamageKind.CORROSION, PanelKind.PRESSURISED_SKIN),
-                LimitSet.allowable()
-                        .withMaxDepthFraction(new Ratio("0.05"))
-                        .withMinResidualFraction(new Ratio("0.85"))
-                        .withMaxArea(new BigDecimal("4.00"))
-                        .withBlendTaper(new Taper(30)),
-                CORROSION_PAGE));
+        for (PanelKind skin : PRESSURE_SKINS) {
+            rows.add(new LimitRow(
+                    new LimitKey(DamageKind.CORROSION, skin),
+                    LimitSet.allowable()
+                            .withMaxDepthFraction(new Ratio("0.05"))
+                            .withMinResidualFraction(new Ratio("0.85"))
+                            .withMaxArea(new BigDecimal("4.00"))
+                            .withBlendTaper(new Taper(30)),
+                    CORROSION_PAGE));
+        }
         rows.add(new LimitRow(
                 new LimitKey(DamageKind.LIGHTNING_BURN),
                 LimitSet.allowable()

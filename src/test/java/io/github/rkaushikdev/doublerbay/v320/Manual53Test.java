@@ -233,4 +233,31 @@ class Manual53Test {
         LimitRow found = lookUp(DamageKind.DENT, PanelKind.FAIRING, Region.CUTOUT_EDGE);
         assertThat(found.limits().maxDepth()).contains(inch("0.100"));
     }
+
+    @Test
+    void theBellyHoldsPressureAndTakesThePressurisedDentRow() {
+        LimitRow belly = lookUp(DamageKind.DENT, PanelKind.BELLY_SKIN);
+        assertThat(belly.key().panelKind()).contains(PanelKind.BELLY_SKIN);
+        assertThat(belly.limits()).isEqualTo(lookUp(DamageKind.DENT).limits());
+        assertThat(depthOf(lookUp(DamageKind.DENT, PanelKind.BELLY_SKIN, 11))).isEqualTo(inch("0.080"));
+        assertThat(depthOf(belly)).isEqualTo(inch("0.060"));
+    }
+
+    @Test
+    void theBellyIsNoLongerReadAgainstTheAnySkinMaterialLossRows() {
+        for (DamageKind kind : List.of(DamageKind.SCRATCH, DamageKind.GOUGE, DamageKind.NICK, DamageKind.CORROSION)) {
+            LimitRow belly = lookUp(kind, PanelKind.BELLY_SKIN);
+            assertThat(belly.key().panelKind()).contains(PanelKind.BELLY_SKIN);
+            assertThat(belly.limits()).isEqualTo(lookUp(kind).limits());
+            assertThat(belly.limits().maxDepthFraction()).contains(new Ratio("0.05"));
+        }
+        assertThat(lookUp(DamageKind.CORROSION, PanelKind.BELLY_SKIN).limits().maxArea())
+                .hasValueSatisfying(area -> assertThat(area).isEqualByComparingTo("4.00"));
+    }
+
+    @Test
+    void theSkinsThePressureRowsAreWrittenForAllHoldPressure() {
+        assertThat(Manual53.PRESSURE_SKINS).allMatch(PanelKind::isPressurised);
+        assertThat(Manual53.PRESSURE_SKINS).containsExactly(PanelKind.PRESSURISED_SKIN, PanelKind.BELLY_SKIN);
+    }
 }
