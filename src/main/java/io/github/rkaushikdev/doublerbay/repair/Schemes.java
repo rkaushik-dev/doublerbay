@@ -1,13 +1,16 @@
 package io.github.rkaushikdev.doublerbay.repair;
 
 import io.github.rkaushikdev.doublerbay.assess.Placement;
+import io.github.rkaushikdev.doublerbay.grid.JointMember;
 import io.github.rkaushikdev.doublerbay.grid.Reference;
 import io.github.rkaushikdev.doublerbay.measure.FastenerSize;
 import io.github.rkaushikdev.doublerbay.measure.Length;
+import io.github.rkaushikdev.doublerbay.structure.Margin;
 import io.github.rkaushikdev.doublerbay.structure.PanelKind;
 import io.github.rkaushikdev.doublerbay.structure.Region;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -69,6 +72,22 @@ public final class Schemes {
     /** The fewest rows each side the place will accept, two through a pressure boundary and one elsewhere. */
     public static int leastRowsFor(Placement placement) {
         return placement.panelKind().isPressurised() ? PRESSURISED_ROWS : 1;
+    }
+
+    /**
+     * The frame or stringer a doubler reaches over, which the drawing has to deal with, if it reaches
+     * one.
+     *
+     * <p>A doubler is flat and a frame or stringer under the skin is not, so a patch that runs over
+     * one is either joggled over its flange or picks the member's own fasteners up into its pattern.
+     * Either way it is no longer a doubler on skin and the drawing says so. A doubler is centred on
+     * the damage, so it reaches the nearest member when half its extent across the member does.
+     */
+    public static Optional<JointMember> memberUnder(DoublerPlan doubler, Placement placement) {
+        if (!placement.reachesTheMember(doubler.along(), doubler.around())) {
+            return Optional.empty();
+        }
+        return placement.member().map(Margin::member);
     }
 
     /** A repair through a pressure boundary has to hold pressure when it is done. */

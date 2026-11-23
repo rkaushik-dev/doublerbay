@@ -94,6 +94,27 @@ class CliRepairingTest {
     }
 
     @Test
+    void aDrawingOverAStringerSaysHowTheDoublerGetsPastIt() {
+        Database database = stocked();
+        String printed = draw(database, assessed(database)).output();
+        assertThat(printed).contains("weight");
+        assertThat(printed).contains("S-10L, joggle over it or take it into the pattern");
+    }
+
+    @Test
+    void aDrawingClearOfEveryMemberHasNoOverLine() {
+        Database database = stocked();
+        UnitOfWork.run(database, unit -> {
+            unit.findings().raiseFinding(Sample.card(7, Sample.cabinPointOn(10, "4.000")));
+            unit.dispositions()
+                    .save(DispositionRecord.raised(new FindingId(2025, 7))
+                            .movedTo(DispositionState.ASSESSED, LocalDate.of(2025, 3, 14), "a.okonkwo"));
+        });
+        String printed = draw(database, "DR-2025-000007").output();
+        assertThat(printed).contains("edge distance").doesNotContain("joggle");
+    }
+
+    @Test
     void aDrawingWritesNothing() {
         Database database = stocked();
         draw(database, assessed(database));

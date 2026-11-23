@@ -57,26 +57,30 @@ public final class Repairing {
     /** The drawing laid out the way the shop reads it off the sheet. */
     public static List<List<String>> drawingRows(RepairScheme scheme, Placement placement) {
         DoublerPlan plan = scheme.doubler();
-        List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("part", placement.part().toString()));
-        rows.add(List.of("region", placement.region().toString()));
-        rows.add(List.of("skin", inches(placement.thickness())));
-        rows.add(List.of("form", scheme.form().value()));
-        rows.add(List.of("category", scheme.category().value()));
-        rows.add(List.of("sealed", scheme.sealed() ? "yes" : "no"));
-        rows.add(List.of("page", scheme.reference().toString()));
-        rows.add(List.of("material", plan.material().toString()));
-        rows.add(List.of("gauge", inches(plan.gauge())));
-        rows.add(List.of("along", inches(plan.along())));
-        rows.add(List.of("around", inches(plan.around())));
-        rows.add(List.of("fastener", "dash " + plan.size().dash()));
-        rows.add(List.of("fasteners", String.valueOf(plan.fastenerCount())));
-        rows.add(List.of("rows each side", String.valueOf(plan.rowsEachSide())));
-        rows.add(List.of("per row", String.valueOf(plan.perRow())));
-        rows.add(List.of("pitch", inches(plan.pitch())));
-        rows.add(List.of("row spacing", inches(plan.rowSpacing())));
-        rows.add(List.of("edge distance", inches(plan.edgeDistance())));
+        List<List<String>> rows = new ArrayList<>(List.of(
+                List.of("part", placement.part().toString()),
+                List.of("region", placement.region().toString()),
+                List.of("skin", inches(placement.thickness())),
+                List.of("form", scheme.form().value()),
+                List.of("category", scheme.category().value()),
+                List.of("sealed", scheme.sealed() ? "yes" : "no"),
+                List.of("page", scheme.reference().toString()),
+                List.of("material", plan.material().toString()),
+                List.of("gauge", inches(plan.gauge())),
+                List.of("along", inches(plan.along())),
+                List.of("around", inches(plan.around())),
+                List.of("weight", plan.weight().toPlainString() + " lb"),
+                List.of("fastener", "dash " + plan.size().dash()),
+                List.of("fasteners", String.valueOf(plan.fastenerCount())),
+                List.of("rows each side", String.valueOf(plan.rowsEachSide())),
+                List.of("per row", String.valueOf(plan.perRow())),
+                List.of("pitch", inches(plan.pitch())),
+                List.of("row spacing", inches(plan.rowSpacing())),
+                List.of("edge distance", inches(plan.edgeDistance()))));
         scheme.filler().ifPresent(filler -> rows.add(List.of("filler", inches(filler))));
+        Schemes.memberUnder(plan, placement)
+                .ifPresent(
+                        member -> rows.add(List.of("over", member + ", joggle over it or take it into the pattern")));
         return rows;
     }
 

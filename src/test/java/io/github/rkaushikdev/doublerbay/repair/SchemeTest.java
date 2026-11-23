@@ -161,6 +161,22 @@ class SchemeTest {
     }
 
     @Test
+    void aDoublerReachingTheNearestStringerNamesIt() {
+        RepairScheme made = scheme();
+        assertThat(Schemes.memberUnder(made.doubler(), placed()))
+                .hasValueSatisfying(member -> assertThat(member).hasToString("S-10L"));
+    }
+
+    @Test
+    void aDoublerClearOfEveryMemberNamesNone() {
+        Placement between = placed(Sample.cabinPointOn(10, "4.000"));
+        RepairScheme made = scheme(Sample.cabinPointOn(10, "4.000"), false, "2.000", "2.000");
+        assertThat(made.doubler().around().isLessThan(Sample.inch("8.000"))).isTrue();
+        assertThat(Schemes.memberUnder(made.doubler(), between)).isEmpty();
+        assertThat(Schemes.memberUnder(made.doubler(), onTheWing())).isEmpty();
+    }
+
+    @Test
     void aRepairOnTheTailConeIsNotSealed() {
         Placement tailCone = placed(Sample.cabinPointAtFrame(50, 10));
         assertThat(Schemes.needsSealing(tailCone)).isFalse();
