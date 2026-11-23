@@ -29,7 +29,7 @@ import picocli.CommandLine.Parameters;
  * standing picture and the pack is that picture cut to a window, and somebody planning a check reads
  * one then the other.
  *
- * <p>The pack prints in three blocks with headings rather than one sorted table. A planner is going
+ * <p>The pack prints in blocks with headings rather than one sorted table. A planner is going
  * to tear the page in half and give the inspections to the shop and the deferrals to the engineer,
  * and a single sorted list makes that a copying exercise.
  */
@@ -38,23 +38,26 @@ public final class Checking {
     /** The row between two blocks of a pack. */
     public static final List<String> BLANK = List.of("", "", "");
 
+    /** The heading each block of a pack prints under, keyed on the word its lines carry. */
+    public static final Map<String, String> HEADINGS = Map.of(
+            "deferral", "deferrals",
+            "inspection", "inspections",
+            "waiting", "waiting on engineering",
+            "strip", "paint off first");
+
     private Checking() {}
 
-    /** The three blocks, with a heading on each and a blank line between. */
+    /** The blocks, with a heading on each and a blank line between, the empty ones left out. */
     public static List<List<String>> packRows(WorkPack pack) {
         List<List<String>> rows = new ArrayList<>();
-        List<Map.Entry<String, List<PackLine>>> blocks = List.of(
-                Map.entry("deferrals", pack.deferrals()),
-                Map.entry("inspections", pack.inspections()),
-                Map.entry("waiting on engineering", pack.waiting()));
-        for (Map.Entry<String, List<PackLine>> block : blocks) {
+        for (Map.Entry<String, List<PackLine>> block : pack.blocks()) {
             if (block.getValue().isEmpty()) {
                 continue;
             }
             if (!rows.isEmpty()) {
                 rows.add(BLANK);
             }
-            rows.add(List.of(Text.upper(block.getKey()), "", ""));
+            rows.add(List.of(Text.upper(HEADINGS.get(block.getKey())), "", ""));
             for (PackLine one : block.getValue()) {
                 rows.add(List.of(one.overrun() ? "OVER" : "", one.reference(), one.detail()));
             }
@@ -103,7 +106,7 @@ public final class Checking {
                     within == null ? OptionalInt.empty() : OptionalInt.of(within)));
             if (asFile != null) {
                 Texts.write(asFile, Export.packAsCsv(pack));
-                say("wrote " + pack.total() + " rows to " + asFile);
+                say("wrote " + Export.packRows(pack).size() + " rows to " + asFile);
                 return Main.OK;
             }
             say(pack.toString());

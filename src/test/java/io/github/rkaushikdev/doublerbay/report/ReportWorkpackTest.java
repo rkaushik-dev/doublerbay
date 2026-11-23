@@ -10,6 +10,7 @@ import io.github.rkaushikdev.doublerbay.disposition.DispositionState;
 import io.github.rkaushikdev.doublerbay.fleet.Snapshot;
 import io.github.rkaushikdev.doublerbay.fleet.UtilisationLog;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
+import io.github.rkaushikdev.doublerbay.ids.PanelId;
 import io.github.rkaushikdev.doublerbay.ids.RepairId;
 import io.github.rkaushikdev.doublerbay.ids.Serial;
 import io.github.rkaushikdev.doublerbay.measure.Interval;
@@ -19,8 +20,11 @@ import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import io.github.rkaushikdev.doublerbay.support.Databases;
 import io.github.rkaushikdev.doublerbay.support.Sample;
 import io.github.rkaushikdev.doublerbay.tolerance.InspectionMethod;
+import io.github.rkaushikdev.doublerbay.tolerance.InspectionSchedule;
+import io.github.rkaushikdev.doublerbay.tolerance.InspectionTask;
 import java.time.LocalDate;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -231,5 +235,48 @@ class ReportWorkpackTest {
     @Test
     void aRepairIdOnAnInspectionLineParsesBack() {
         assertThat(RepairId.parse("RP-53-0001")).isEqualTo(new RepairId(53, 1));
+    }
+
+    private static InspectionTask task(int sequence, int panel, InspectionMethod method) {
+        return new InspectionTask(
+                new RepairId(53, sequence),
+                new PanelId(53, 10, panel, "L"),
+                InspectionSchedule.of(method, Interval.parse("8000 FC"), Interval.parse("4000 FC")),
+                DAY,
+                Sample.flown(13800, 24200));
+    }
+
+    @Test
+    void theRepairsOnOnePanelThatNeedThePaintOffAreOneStrippingJob() {
+        List<PackLine> strip = WorkPacks.strippingLines(List.of(
+                task(2, 152, InspectionMethod.HFEC),
+                task(1, 143, InspectionMethod.LFEC),
+                task(3, 143, InspectionMethod.HFEC),
+                task(4, 143, InspectionMethod.DVI)));
+        assertThat(strip).hasSize(2);
+        assertThat(strip.get(0).what()).isEqualTo("strip");
+        assertThat(strip.get(0).reference()).isEqualTo("5310-143L");
+        assertThat(strip.get(0).detail())
+                .isEqualTo("paint off for low frequency eddy current on RP-53-0001,"
+                        + " high frequency eddy current on RP-53-0003");
+        assertThat(strip.get(1).reference()).isEqualTo("5310-152L");
+        assertThat(strip.get(0).overrun()).isFalse();
+    }
+
+    @Test
+    void inspectionsThatLookThroughThePaintNeedNoStripping() {
+        assertThat(WorkPacks.strippingLines(
+                        List.of(task(1, 143, InspectionMethod.DVI), task(2, 143, InspectionMethod.UT))))
+                .isEmpty();
+        assertThat(pack().stripping()).isEmpty();
+    }
+
+    @Test
+    void strippingIsPreparationAndIsNotCountedAsWorkOwed() {
+        PackLine strip = new PackLine("strip", "5310-143L", "paint off for high frequency eddy current on RP-53-0001");
+        WorkPack built = new WorkPack(MSN, OPENS, CLOSES, List.of(), List.of(), List.of(), List.of(strip));
+        assertThat(built.stripping()).containsExactly(strip);
+        assertThat(built.total()).isZero();
+        assertThat(built.isEmpty()).isTrue();
     }
 }

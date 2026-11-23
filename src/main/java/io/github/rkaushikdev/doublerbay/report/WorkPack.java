@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -16,6 +17,8 @@ import java.util.Objects;
  * @param deferrals the deferrals falling due
  * @param inspections the repeat inspections falling due
  * @param waiting the orders out to the manufacturer, which no check can clear
+ * @param stripping the panels the paint comes off before the inspections on them can be done, one
+ *     line a panel
  */
 public record WorkPack(
         Serial serial,
@@ -23,7 +26,8 @@ public record WorkPack(
         LocalDate closes,
         List<PackLine> deferrals,
         List<PackLine> inspections,
-        List<PackLine> waiting) {
+        List<PackLine> waiting,
+        List<PackLine> stripping) {
 
     public WorkPack {
         Objects.requireNonNull(serial, "serial");
@@ -32,6 +36,30 @@ public record WorkPack(
         deferrals = List.copyOf(deferrals);
         inspections = List.copyOf(inspections);
         waiting = List.copyOf(waiting);
+        stripping = List.copyOf(stripping);
+    }
+
+    /** A pack with no paint to come off. */
+    public WorkPack(
+            Serial serial,
+            LocalDate opens,
+            LocalDate closes,
+            List<PackLine> deferrals,
+            List<PackLine> inspections,
+            List<PackLine> waiting) {
+        this(serial, opens, closes, deferrals, inspections, waiting, List.of());
+    }
+
+    /**
+     * Every block of the pack under the word its lines carry, in the order a planner reads them: the
+     * deferrals, the inspections, what is waiting on engineering, then the paint that comes off first.
+     */
+    public List<Map.Entry<String, List<PackLine>>> blocks() {
+        return List.of(
+                Map.entry("deferral", deferrals),
+                Map.entry("inspection", inspections),
+                Map.entry("waiting", waiting),
+                Map.entry("strip", stripping));
     }
 
     /** The ones the check can actually clear: the deferrals, then the inspections. */
@@ -41,7 +69,10 @@ public record WorkPack(
         return List.copyOf(lines);
     }
 
-    /** Every line on the pack. */
+    /**
+     * Every line on the pack. The stripping is not counted: it is the preparation for inspections
+     * already on the pack, not more work owed.
+     */
     public int total() {
         return dueLines().size() + waiting.size();
     }

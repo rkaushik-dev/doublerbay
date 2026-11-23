@@ -4,7 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * One tail's work pack for one check, in its three blocks.
+ * One tail's work pack for one check, in its blocks: what is due, what is waiting, and the stripping
+ * the inspections need.
  *
  * @param serial the tail
  * @param opens the first day of the check
@@ -15,6 +16,7 @@ import java.util.List;
  * @param deferrals the deferrals falling due
  * @param inspections the repeat inspections falling due
  * @param waiting the orders out to the manufacturer
+ * @param stripping the panels the paint comes off before their inspections
  * @param references every reference the pack names
  */
 public record PackOut(
@@ -27,4 +29,5 @@ public record PackOut(
         List<PackLineOut> deferrals,
         List<PackLineOut> inspections,
         List<PackLineOut> waiting,
+        List<PackLineOut> stripping,
         List<String> references) {}

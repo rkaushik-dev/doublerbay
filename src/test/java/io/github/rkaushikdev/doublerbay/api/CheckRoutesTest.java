@@ -150,6 +150,7 @@ class CheckRoutesTest {
         Built built = built();
         fit(built.api(), assessed(built.database()));
         assertThat(pack(built.api()).json().get("inspections")).hasToString("[]");
+        assertThat(pack(built.api()).json().get("stripping")).hasToString("[]");
     }
 
     @Test
@@ -159,6 +160,10 @@ class CheckRoutesTest {
         JsonNode body = pack(built.api(), "5127", "2030-01-01", "2030-01-08").json();
         assertThat(body.get("inspections")).hasSize(1);
         assertThat(body.get("inspections").get(0).get("reference").asText()).isEqualTo("RP-53-0001");
+        assertThat(body.get("stripping")).hasSize(1);
+        assertThat(body.get("stripping").get(0).get("detail").asText())
+                .isEqualTo("paint off for high frequency eddy current on RP-53-0001");
+        assertThat(body.get("total").asInt()).isEqualTo(1);
     }
 
     @Test

@@ -3,6 +3,7 @@ package io.github.rkaushikdev.doublerbay.report;
 import io.github.rkaushikdev.doublerbay.BadReading;
 import io.github.rkaushikdev.doublerbay.disposition.EngineeringOrder;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
+import io.github.rkaushikdev.doublerbay.ids.PanelId;
 import io.github.rkaushikdev.doublerbay.ids.RepairId;
 import io.github.rkaushikdev.doublerbay.ids.Serial;
 import io.github.rkaushikdev.doublerbay.measure.Usage;
@@ -11,9 +12,12 @@ import io.github.rkaushikdev.doublerbay.tolerance.InspectionTask;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +54,34 @@ public final class WorkPacks {
                 task.against().toString(),
                 task.schedule().method() + " on " + task.part() + ", due " + task.due(),
                 over);
+    }
+
+    /**
+     * The panels the paint has to come off before the inspections on them can be done, one line a
+     * panel in part number order.
+     *
+     * <p>Eddy current reads the metal, and paint between the probe and the skin is lift off the
+     * instrument reads as a defect or as nothing. The hangar strips a panel once, so two repairs on
+     * one panel that both need it are one stripping job and one line, which is what lets the paint
+     * shop be booked before the check opens rather than when the inspector reaches the panel.
+     */
+    public static List<PackLine> strippingLines(List<InspectionTask> tasks) {
+        Map<PanelId, List<InspectionTask>> byPanel = new TreeMap<>(Comparator.comparing(PanelId::toString));
+        for (InspectionTask task : tasks) {
+            if (task.schedule().method().needsPaintOff()) {
+                byPanel.computeIfAbsent(task.part(), ignored -> new ArrayList<>())
+                        .add(task);
+            }
+        }
+        List<PackLine> lines = new ArrayList<>();
+        byPanel.forEach((part, onIt) -> lines.add(new PackLine(
+                "strip",
+                part.toString(),
+                "paint off for "
+                        + onIt.stream()
+                                .map(one -> one.schedule().method() + " on " + one.against())
+                                .collect(Collectors.joining(", ")))));
+        return List.copyOf(lines);
     }
 
     /** An order out to the manufacturer, as a pack line that is never over. */
@@ -96,7 +128,8 @@ public final class WorkPacks {
                 tasks.stream()
                         .map(one -> inspectionLine(one, already.contains(one.against())))
                         .toList(),
-                waiting(unit, serial, closes));
+                waiting(unit, serial, closes),
+                strippingLines(tasks));
     }
 
     /** The orders out against this tail, which no check can clear. */

@@ -109,10 +109,7 @@ public final class Export {
      */
     public static List<List<String>> packRows(WorkPack pack) {
         List<List<String>> rows = new ArrayList<>();
-        for (Map.Entry<String, List<PackLine>> block : List.of(
-                Map.entry("deferral", pack.deferrals()),
-                Map.entry("inspection", pack.inspections()),
-                Map.entry("waiting", pack.waiting()))) {
+        for (Map.Entry<String, List<PackLine>> block : pack.blocks()) {
             for (PackLine one : block.getValue()) {
                 rows.add(List.of(block.getKey(), one.reference(), one.detail(), one.overrun() ? "yes" : "no"));
             }

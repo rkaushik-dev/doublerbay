@@ -258,4 +258,21 @@ class CliCheckingTest {
                 new WorkPack(MSN, LocalDate.of(2025, 4, 1), LocalDate.of(2025, 4, 8), List.of(), List.of(), List.of());
         assertThat(Checking.packRows(pack)).isEmpty();
     }
+
+    @Test
+    void thePaintOffComesAfterTheInspectionsItIsFor() {
+        WorkPack pack = new WorkPack(
+                MSN,
+                LocalDate.of(2025, 4, 1),
+                LocalDate.of(2025, 4, 8),
+                List.of(),
+                List.of(new PackLine("inspection", "RP-53-0001", "high frequency eddy current")),
+                List.of(),
+                List.of(new PackLine("strip", "5310-143L", "paint off for high frequency eddy current on RP-53-0001")));
+        List<List<String>> rows = Checking.packRows(pack);
+        assertThat(rows.get(0).get(0)).isEqualTo("INSPECTIONS");
+        assertThat(rows).contains(List.of("PAINT OFF FIRST", "", ""));
+        assertThat(rows.get(rows.size() - 1))
+                .containsExactly("", "5310-143L", "paint off for high frequency eddy current on RP-53-0001");
+    }
 }

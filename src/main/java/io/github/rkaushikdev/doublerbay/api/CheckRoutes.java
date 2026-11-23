@@ -86,6 +86,7 @@ final class CheckRoutes {
                 lines(pack.deferrals()),
                 lines(pack.inspections()),
                 lines(pack.waiting()),
+                lines(pack.stripping()),
                 WorkPacks.referencesOn(pack));
     }
 
