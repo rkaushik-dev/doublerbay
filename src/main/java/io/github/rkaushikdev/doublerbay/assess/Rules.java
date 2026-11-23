@@ -43,6 +43,7 @@ public final class Rules {
             Rules::lengthCheck,
             Rules::areaCheck,
             Rules::exfoliationCheck,
+            Rules::strikeCheck,
             Rules::edgeMarginCheck,
             Rules::blendShareCheck);
 
@@ -66,17 +67,26 @@ public final class Rules {
         return Optional.of(new Check(passed ? pass(rule, detail) : fail(rule, detail), onFailure));
     }
 
+    /**
+     * A rule that is a yes or no about the damage rather than a number against a limit, reading one
+     * detail when the fault is there and another when it is not.
+     */
+    private static Optional<Check> flag(
+            String rule, boolean fault, String clear, String faulted, Disposition onFailure) {
+        return answer(!fault, rule, fault ? faulted : clear, onFailure);
+    }
+
     /** Whether the page allows this damage at any size at all. */
     public static Check allowedCheck(Case held) {
-        String where = held.placement().region() + " on " + held.placement().panelKind();
-        if (held.limits().allowed()) {
-            return new Check(
-                    pass("allowable", "the book allows a " + held.finding().kind() + " " + where),
-                    Disposition.REPAIRABLE);
-        }
-        return new Check(
-                fail("allowable", "no allowable limit for a " + held.finding().kind() + " " + where),
-                Disposition.REPAIRABLE);
+        String what = held.finding().kind() + " " + held.placement().region() + " on "
+                + held.placement().panelKind();
+        return flag(
+                        "allowable",
+                        !held.limits().allowed(),
+                        "the book allows a " + what,
+                        "no allowable limit for a " + what,
+                        Disposition.REPAIRABLE)
+                .orElseThrow();
     }
 
     /**
@@ -141,11 +151,13 @@ public final class Rules {
         if (!(held.finding().geometry() instanceof Dent dent)) {
             return Optional.empty();
         }
-        if (dent.isSmooth()) {
-            return answer(true, "smoothness", "smooth bottom and no crack", Disposition.REPAIRABLE);
-        }
         String fault = dent.cracked() ? "cracked" : "sharp bottomed";
-        return answer(false, "smoothness", "the dent is " + fault, Disposition.REPAIRABLE);
+        return flag(
+                "smoothness",
+                !dent.isSmooth(),
+                "smooth bottom and no crack",
+                "the dent is " + fault,
+                Disposition.REPAIRABLE);
     }
 
     /** Length against the cap, for the kinds that lie along a line. */
@@ -217,10 +229,39 @@ public final class Rules {
         if (!(held.finding().geometry() instanceof Corrosion corrosion)) {
             return Optional.empty();
         }
-        if (!corrosion.exfoliating()) {
-            return answer(true, "exfoliation", "no exfoliation reported", Disposition.REPAIRABLE);
+        return flag(
+                "exfoliation",
+                corrosion.exfoliating(),
+                "no exfoliation reported",
+                "exfoliation is not reached by a blend",
+                Disposition.REPAIRABLE);
+    }
+
+    /**
+     * Where a lightning strike attached, which decides more than the size of the burn does.
+     *
+     * <p>A strike that attached on a fastener drove current through the joint, and the fastener comes
+     * out so the hole can be looked at for arcing whatever the surface reads, which is a repair job. A
+     * swept stroke dragged across the skin leaves pits nobody counted one by one, so the whole zone is
+     * blended and looked at again rather than each pit being taken on its own.
+     */
+    public static Optional<Check> strikeCheck(Case held) {
+        if (!(held.finding().geometry() instanceof LightningBurn burn)) {
+            return Optional.empty();
         }
-        return answer(false, "exfoliation", "exfoliation is not reached by a blend", Disposition.REPAIRABLE);
+        if (burn.needsTheFastenerOut()) {
+            return answer(
+                    false,
+                    "attachment",
+                    "attached on a fastener, which comes out so the hole can be checked for arcing",
+                    Disposition.REPAIRABLE);
+        }
+        return flag(
+                "attachment",
+                burn.isSwept(),
+                burn.pitCount() + " pits on the open skin",
+                "a swept stroke of " + burn.pitCount() + " pits, blended and looked at as one zone",
+                Disposition.REWORKABLE);
     }
 
     /** How much of the panel the cleanup would take, if a cleanup is on the table. */

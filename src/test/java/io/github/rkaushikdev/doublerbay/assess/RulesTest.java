@@ -8,6 +8,7 @@ import io.github.rkaushikdev.doublerbay.damage.DamageKind;
 import io.github.rkaushikdev.doublerbay.damage.DamageOrigin;
 import io.github.rkaushikdev.doublerbay.damage.Dent;
 import io.github.rkaushikdev.doublerbay.damage.Finding;
+import io.github.rkaushikdev.doublerbay.damage.LightningBurn;
 import io.github.rkaushikdev.doublerbay.damage.Scoring;
 import io.github.rkaushikdev.doublerbay.manual.Cleanups;
 import io.github.rkaushikdev.doublerbay.manual.LimitSet;
@@ -344,6 +345,49 @@ class RulesTest {
     @Test
     void noBlendShareIsCheckedWhereGrindingIsNotAllowed() {
         assertThat(Rules.blendShareCheck(caseOf(dent()))).isEmpty();
+    }
+
+    private static Finding strike(int pits, boolean onAFastener) {
+        return Sample.cardWith()
+                .kind(DamageKind.LIGHTNING_BURN)
+                .geometry(new LightningBurn(inch("1.000"), inch("1.000"), pits, inch("0.004"), onAFastener, true))
+                .at(Sample.cabinPointOn(10, "4.000"))
+                .origin(DamageOrigin.LIGHTNING)
+                .build();
+    }
+
+    @Test
+    void aStrikeOnTheOpenSkinWithAFewPitsGetsPastTheAttachmentRule() {
+        Check checked = Rules.strikeCheck(caseOf(strike(4, false))).orElseThrow();
+        assertThat(checked.passed()).isTrue();
+        assertThat(checked.reason().detail()).isEqualTo("4 pits on the open skin");
+    }
+
+    @Test
+    void aStrikeThatAttachedOnAFastenerTakesTheFastenerOut() {
+        Check checked = Rules.strikeCheck(caseOf(strike(2, true))).orElseThrow();
+        assertThat(checked.passed()).isFalse();
+        assertThat(checked.outcome()).isSameAs(Disposition.REPAIRABLE);
+        assertThat(checked.reason().detail()).contains("checked for arcing");
+    }
+
+    @Test
+    void aSweptStrokeIsBlendedAndLookedAtAsOneZone() {
+        Check swept = Rules.strikeCheck(caseOf(strike(LightningBurn.SWEPT_STROKE_PITS, false)))
+                .orElseThrow();
+        assertThat(swept.passed()).isFalse();
+        assertThat(swept.outcome()).isSameAs(Disposition.REWORKABLE);
+        assertThat(swept.reason().detail()).isEqualTo("a swept stroke of 12 pits, blended and looked at as one zone");
+        assertThat(Rules.strikeCheck(caseOf(strike(LightningBurn.SWEPT_STROKE_PITS - 1, false)))
+                        .orElseThrow()
+                        .passed())
+                .isTrue();
+    }
+
+    @Test
+    void theAttachmentRuleStandsAsideForAnythingButAStrike() {
+        assertThat(Rules.strikeCheck(caseOf(scratch()))).isEmpty();
+        assertThat(Rules.strikeCheck(caseOf(dent()))).isEmpty();
     }
 
     @Test
