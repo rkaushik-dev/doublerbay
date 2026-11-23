@@ -43,6 +43,38 @@ public record DoublerPlan(
         }
     }
 
+    /**
+     * A doubler over a hole of a size, with its rows at the spacings the fastener size sets: pitch and
+     * row spacing at their least and edge distance at the preferred, the skirt on every side.
+     */
+    public static DoublerPlan laidOut(
+            Length gauge,
+            Material material,
+            Length holeAlong,
+            Length holeAround,
+            FastenerSize size,
+            int rowsEachSide,
+            int perRow) {
+        Length rowSpacing = size.minRowSpacing();
+        Length edge = size.preferredEdgeDistance();
+        Length skirt = skirtOf(edge, rowSpacing, rowsEachSide);
+        return new DoublerPlan(
+                gauge,
+                material,
+                holeAlong.plus(skirt.times(2)),
+                holeAround.plus(skirt.times(2)),
+                size,
+                rowsEachSide,
+                perRow,
+                size.minPitch(),
+                rowSpacing,
+                edge);
+    }
+
+    private static Length skirtOf(Length edge, Length rowSpacing, int rows) {
+        return edge.plus(rowSpacing.times(rows - 1));
+    }
+
     /** Every hole in the patch, four sides of it. */
     public int fastenerCount() {
         return rowsEachSide * perRow * 4;
@@ -50,7 +82,7 @@ public record DoublerPlan(
 
     /** How far the doubler reaches past the hole on one side. */
     public Length skirt() {
-        return edgeDistance.plus(rowSpacing.times(rowsEachSide - 1));
+        return skirtOf(edgeDistance, rowSpacing, rowsEachSide);
     }
 
     /** {@code 0.050 2024-T3 CLAD, 5.282 by 5.282, 48 off -5}, the way the parts line reads. */

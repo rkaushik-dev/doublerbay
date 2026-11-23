@@ -34,6 +34,9 @@ public final class Schemes {
     public static final Set<Region> INSPECTED_REGIONS =
             Collections.unmodifiableSet(EnumSet.of(Region.FASTENER_ROW, Region.JOINT_BAND, Region.CUTOUT_CORNER));
 
+    /** Rows each side a repair through a pressure boundary carries, so one row can fail and it holds. */
+    public static final int PRESSURISED_ROWS = 2;
+
     /** What the shop reaches for on skin unless the drawing says otherwise. */
     public static final FastenerSize STANDARD_FASTENER = new FastenerSize(5);
 
@@ -61,6 +64,11 @@ public final class Schemes {
             return RepairCategory.B;
         }
         return RepairCategory.A;
+    }
+
+    /** The fewest rows each side the place will accept, two through a pressure boundary and one elsewhere. */
+    public static int leastRowsFor(Placement placement) {
+        return placement.panelKind().isPressurised() ? PRESSURISED_ROWS : 1;
     }
 
     /** A repair through a pressure boundary has to hold pressure when it is done. */
@@ -100,8 +108,8 @@ public final class Schemes {
             boolean temporary) {
         FastenerSize fastener = size != null ? size : STANDARD_FASTENER;
         RepairForm form = formFor(placement);
-        DoublerPlan doubler =
-                Doublers.sizeDoubler(along, around, placement.thickness(), placement.material(), fastener);
+        DoublerPlan doubler = Doublers.sizeDoubler(
+                along, around, placement.thickness(), placement.material(), fastener, leastRowsFor(placement));
         return RepairScheme.of(
                 form,
                 categoryFor(placement, temporary),

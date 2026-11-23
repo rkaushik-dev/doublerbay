@@ -148,6 +148,19 @@ class SchemeTest {
     }
 
     @Test
+    void aSmallHoleThroughThePressureBoundaryStillGetsTwoRows() {
+        assertThat(Schemes.leastRowsFor(placed())).isEqualTo(Schemes.PRESSURISED_ROWS);
+        RepairScheme small = scheme("0.250", "0.250");
+        assertThat(small.doubler().rowsEachSide()).isEqualTo(2);
+        Placement tailCone = placed(Sample.cabinPointAtFrame(50, 10));
+        assertThat(Schemes.leastRowsFor(tailCone)).isEqualTo(1);
+        assertThat(scheme(Sample.cabinPointAtFrame(50, 10), false, "0.250", "0.250")
+                        .doubler()
+                        .rowsEachSide())
+                .isEqualTo(1);
+    }
+
+    @Test
     void aRepairOnTheTailConeIsNotSealed() {
         Placement tailCone = placed(Sample.cabinPointAtFrame(50, 10));
         assertThat(Schemes.needsSealing(tailCone)).isFalse();

@@ -200,6 +200,37 @@ class DoublerTest {
     }
 
     @Test
+    void aSmallHoleCarriesOneRowUnlessMoreAreAskedFor() {
+        DoublerPlan bare = Doublers.sizeDoubler(inch("0.250"), inch("0.250"), SKIN, CLAD, new FastenerSize(5));
+        DoublerPlan asked = Doublers.sizeDoubler(inch("0.250"), inch("0.250"), SKIN, CLAD, new FastenerSize(5), 2);
+        assertThat(bare.rowsEachSide()).isEqualTo(1);
+        assertThat(asked.rowsEachSide()).isEqualTo(2);
+        assertThat(asked.perRow()).isEqualTo(bare.perRow());
+        assertThat(asked.along())
+                .isEqualTo(bare.along().plus(new FastenerSize(5).minRowSpacing().times(2)));
+    }
+
+    @Test
+    void askingForMoreRowsThanTheLoadNeedsNeverTakesAnyAway() {
+        DoublerPlan loaded = plan("2.000", "2.000", "0.040", 5);
+        DoublerPlan asked = Doublers.sizeDoubler(inch("2.000"), inch("2.000"), SKIN, CLAD, new FastenerSize(5), 2);
+        assertThat(asked).isEqualTo(loaded);
+        assertThatThrownBy(() -> Doublers.sizeDoubler(inch("2.000"), inch("2.000"), SKIN, CLAD, new FastenerSize(5), 0))
+                .isInstanceOf(BadReading.class)
+                .hasMessageContaining("at least one row");
+    }
+
+    @Test
+    void aLaidOutPlanTakesItsSpacingsOffTheFastener() {
+        DoublerPlan made =
+                DoublerPlan.laidOut(inch("0.050"), CLAD, inch("1.000"), inch("1.000"), new FastenerSize(5), 2, 3);
+        assertThat(made.pitch()).isEqualTo(new FastenerSize(5).minPitch());
+        assertThat(made.skirt())
+                .isEqualTo(new FastenerSize(5).preferredEdgeDistance().plus(made.rowSpacing()));
+        assertThat(made.along()).isEqualTo(inch("1.000").plus(made.skirt().times(2)));
+    }
+
+    @Test
     void aRowOfOneFastenerIsNotAJoint() {
         assertThatThrownBy(() -> laidOut(1, 1))
                 .isInstanceOf(BadReading.class)

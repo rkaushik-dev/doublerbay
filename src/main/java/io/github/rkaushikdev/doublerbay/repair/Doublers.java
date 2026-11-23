@@ -119,31 +119,29 @@ public final class Doublers {
      */
     public static DoublerPlan sizeDoubler(
             Length along, Length around, Length skin, Material material, FastenerSize size) {
+        return sizeDoubler(along, around, skin, material, size, 1);
+    }
+
+    /**
+     * Work out a doubler with at least so many rows each side, whatever the load would get away with.
+     *
+     * <p>The count off the load is the least the joint needs. A pressure boundary asks for more than
+     * that: with one row, a single cracked ligament between two holes lets the patch peel, and the
+     * second row is there so a row can fail and the repair still holds the cabin.
+     */
+    public static DoublerPlan sizeDoubler(
+            Length along, Length around, Length skin, Material material, FastenerSize size, int leastRows) {
         if (along.mils() <= 0 || around.mils() <= 0) {
             throw new BadReading("a doubler covers a hole with a size");
         }
-
-        Length gauge = SheetGauge.oneStepHeavier(skin).nominal();
-        Length pitch = size.diameters(FastenerSize.MIN_PITCH_D);
-        Length rowSpacing = size.diameters(FastenerSize.MIN_ROW_SPACING_D);
-        Length edge = size.diameters(FastenerSize.PREFERRED_EDGE_DISTANCE_D);
-
+        if (leastRows < 1) {
+            throw new BadReading("a doubler has at least one row of fasteners each side");
+        }
         Length longer = Length.max(along, around);
         int needed = fastenersEachSide(skin, longer, material, size);
-        int perRow = Math.max(Math.floorDiv(longer.mils(), pitch.mils()) + 1, 2);
-        int rows = Math.max(Math.ceilDiv(needed, perRow), 1);
-
-        Length skirt = edge.plus(rowSpacing.times(rows - 1));
-        return new DoublerPlan(
-                gauge,
-                material,
-                along.plus(skirt.times(2)),
-                around.plus(skirt.times(2)),
-                size,
-                rows,
-                perRow,
-                pitch,
-                rowSpacing,
-                edge);
+        int perRow = Math.max(Math.floorDiv(longer.mils(), size.minPitch().mils()) + 1, 2);
+        int rows = Math.max(Math.ceilDiv(needed, perRow), leastRows);
+        return DoublerPlan.laidOut(
+                SheetGauge.oneStepHeavier(skin).nominal(), material, along, around, size, rows, perRow);
     }
 }
