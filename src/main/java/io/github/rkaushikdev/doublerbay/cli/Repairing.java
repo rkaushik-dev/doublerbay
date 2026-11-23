@@ -16,6 +16,7 @@ import io.github.rkaushikdev.doublerbay.repair.RepairPair;
 import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
 import io.github.rkaushikdev.doublerbay.repair.RepairScheme;
 import io.github.rkaushikdev.doublerbay.repair.Schemes;
+import io.github.rkaushikdev.doublerbay.report.Export;
 import io.github.rkaushikdev.doublerbay.report.RepairWeight;
 import io.github.rkaushikdev.doublerbay.service.Embodiment;
 import io.github.rkaushikdev.doublerbay.service.Repairs;
@@ -23,6 +24,7 @@ import io.github.rkaushikdev.doublerbay.store.StoreContext;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import io.github.rkaushikdev.doublerbay.tolerance.Schedules;
 import io.github.rkaushikdev.doublerbay.util.Decimals;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -253,6 +255,9 @@ public final class Repairing {
         @Option(names = "--all", description = "include the ones taken off")
         boolean everything;
 
+        @Option(names = "--csv", description = "write the repair register to a file")
+        Path asFile;
+
         @Override
         public Integer call() {
             List<RepairRecord> fitted = work(unit -> {
@@ -260,28 +265,21 @@ public final class Repairing {
                 unit.aircraft().get(held);
                 return unit.repairs().onTail(held, !everything);
             });
+            if (asFile != null) {
+                Texts.write(asFile, Export.repairsAsCsv(fitted));
+                say("wrote " + fitted.size() + " rows to " + asFile);
+                return Main.OK;
+            }
             if (fitted.isEmpty()) {
                 say(Output.sayNothingFound("fitted to " + serial));
                 return Main.OK;
             }
             List<List<String>> rows = new ArrayList<>();
-            rows.add(List.of("reference", "part", "against", "category", "lb", "fitted", "off"));
-            fitted.stream().map(RepairList::row).forEach(rows::add);
+            rows.add(Export.REPAIR_HEADER);
+            rows.addAll(Export.repairRows(fitted));
             say(Output.columns(rows));
             say(RepairWeight.of(fitted).toString());
             return Main.OK;
-        }
-
-        /** One repair as a line of the list, its plate weight beside its category. */
-        static List<String> row(RepairRecord one) {
-            return List.of(
-                    one.reference().toString(),
-                    one.part().toString(),
-                    one.against().toString(),
-                    one.scheme().category().name(),
-                    one.scheme().doubler().weight().toPlainString(),
-                    one.embodied().toString(),
-                    one.removed().map(LocalDate::toString).orElse(""));
         }
     }
 

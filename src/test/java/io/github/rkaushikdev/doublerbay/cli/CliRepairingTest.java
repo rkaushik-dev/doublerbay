@@ -8,16 +8,20 @@ import io.github.rkaushikdev.doublerbay.ids.FindingId;
 import io.github.rkaushikdev.doublerbay.ids.RepairId;
 import io.github.rkaushikdev.doublerbay.measure.Length;
 import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
+import io.github.rkaushikdev.doublerbay.report.Export;
 import io.github.rkaushikdev.doublerbay.store.Database;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import io.github.rkaushikdev.doublerbay.support.Cli;
 import io.github.rkaushikdev.doublerbay.support.Cli.Ran;
 import io.github.rkaushikdev.doublerbay.support.Desk;
 import io.github.rkaushikdev.doublerbay.support.Sample;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class CliRepairingTest {
 
@@ -287,5 +291,33 @@ class CliRepairingTest {
                 database,
                 unit -> unit.repairs().get(new RepairId(53, 1)).centre().along());
         assertThat(along).isEqualTo(Sample.inch("468.000"));
+    }
+
+    @TempDir
+    Path registerDir;
+
+    @Test
+    void theRepairRegisterIsWrittenToAFileWithTheListsOwnColumns() throws Exception {
+        Database database = stocked();
+        fit(database, assessed(database));
+        Path written = registerDir.resolve("register.csv");
+        Ran answer = invoke(database, "repair", "list", "--tail", "5127", "--csv", written.toString());
+        assertThat(answer.exitCode()).isZero();
+        assertThat(answer.output()).contains("wrote 1 rows to");
+        List<String> lines = Files.readAllLines(written);
+        assertThat(lines.get(0)).isEqualTo(String.join(",", Export.REPAIR_HEADER));
+        assertThat(lines.get(1)).startsWith("RP-53-0001,").contains(",DR-2025-000001,53-40-01,");
+        String listed = invoke(database, "repair", "list", "--tail", "5127").output();
+        assertThat(listed).contains("inspected").contains("at FC");
+    }
+
+    @Test
+    void aTailWithNoRepairsStillWritesTheHeader() throws Exception {
+        Database database = stocked();
+        Path written = registerDir.resolve("empty.csv");
+        assertThat(invoke(database, "repair", "list", "--tail", "5127", "--csv", written.toString())
+                        .output())
+                .contains("wrote 0 rows");
+        assertThat(Files.readAllLines(written)).containsExactly(String.join(",", Export.REPAIR_HEADER));
     }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.doublerbay.BadReading;
+import io.github.rkaushikdev.doublerbay.assess.Placement;
 import io.github.rkaushikdev.doublerbay.damage.Crack;
 import io.github.rkaushikdev.doublerbay.damage.DamageKind;
 import io.github.rkaushikdev.doublerbay.damage.DamageOrigin;
@@ -12,10 +13,14 @@ import io.github.rkaushikdev.doublerbay.disposition.Deferral;
 import io.github.rkaushikdev.doublerbay.disposition.DispositionRecord;
 import io.github.rkaushikdev.doublerbay.disposition.DispositionState;
 import io.github.rkaushikdev.doublerbay.fleet.Forecast;
+import io.github.rkaushikdev.doublerbay.grid.Reference;
 import io.github.rkaushikdev.doublerbay.ids.FindingId;
+import io.github.rkaushikdev.doublerbay.ids.RepairId;
 import io.github.rkaushikdev.doublerbay.ids.Serial;
 import io.github.rkaushikdev.doublerbay.measure.Angle;
 import io.github.rkaushikdev.doublerbay.measure.Interval;
+import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
+import io.github.rkaushikdev.doublerbay.repair.Schemes;
 import io.github.rkaushikdev.doublerbay.store.Database;
 import io.github.rkaushikdev.doublerbay.store.UnitOfWork;
 import io.github.rkaushikdev.doublerbay.support.Cli;
@@ -299,5 +304,26 @@ class ReportExportTest {
         Ran answer = Cli.invoke(
                 database, "check", "pack", "--tail", "5127", "--opens", "2025-04-01", "--closes", "2025-04-08");
         assertThat(answer.output()).contains("nothing for this check");
+    }
+
+    @Test
+    void aRepairRegisterRowCarriesThePageTheCommitmentAndTheCountersItWentOnAt() {
+        Placement placed = Placement.place(Sample.tailContext(), Sample.card(Sample.cabinPointOn(10, "4.000")));
+        RepairRecord fitted = new RepairRecord(
+                new RepairId(53, 1),
+                placed.part(),
+                new FindingId(2025, 1),
+                Schemes.selectScheme(Sample.inch("2.000"), Sample.inch("2.000"), placed, Reference.parse("53-40-01")),
+                placed.centre(),
+                LocalDate.of(2025, 4, 2),
+                Sample.flown(13900, 24400));
+        RepairRecord off = fitted.removedOn(LocalDate.of(2025, 9, 1));
+        List<List<String>> rows = Export.repairRows(List.of(fitted, off));
+        assertThat(rows.get(0)).hasSize(Export.REPAIR_HEADER.size());
+        assertThat(rows.get(0).subList(0, 6))
+                .containsExactly("RP-53-0001", placed.part().toString(), "DR-2025-000001", "53-40-01", "A", "no");
+        assertThat(rows.get(0).subList(7, 10)).containsExactly("2025-04-02", "13900", "");
+        assertThat(rows.get(1).get(9)).isEqualTo("2025-09-01");
+        assertThat(Export.lineCount(Export.repairsAsCsv(List.of(fitted, off)))).isEqualTo(2);
     }
 }

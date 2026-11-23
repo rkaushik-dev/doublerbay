@@ -1,7 +1,9 @@
 package io.github.rkaushikdev.doublerbay.report;
 
 import io.github.rkaushikdev.doublerbay.BadReading;
+import io.github.rkaushikdev.doublerbay.repair.RepairRecord;
 import io.github.rkaushikdev.doublerbay.util.Decimals;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,14 @@ public final class Export {
 
     /** The columns of a work pack. */
     public static final List<String> PACK_HEADER = List.of("block", "reference", "detail", "over");
+
+    /**
+     * The columns of a tail's repair register: what each repair answers, the page it was schemed off,
+     * what it commits the operator to, what it weighs, and the counters it went on at, which is what
+     * its repeat inspection counts from.
+     */
+    public static final List<String> REPAIR_HEADER =
+            List.of("reference", "part", "against", "page", "category", "inspected", "lb", "fitted", "at FC", "off");
 
     /** The columns of the growth report. */
     public static final List<String> GROWTH_HEADER = List.of("card", "readings", "total", "worst rate", "trend");
@@ -137,6 +147,28 @@ public final class Export {
     /** Measured crack growth, one card a row. */
     public static String growthAsCsv(List<Growth> every) {
         return asCsv(GROWTH_HEADER, growthRows(every));
+    }
+
+    /** A tail's repairs as register rows, one repair a row, in the order given. */
+    public static List<List<String>> repairRows(List<RepairRecord> repairs) {
+        return repairs.stream()
+                .map(one -> List.of(
+                        one.reference().toString(),
+                        one.part().toString(),
+                        one.against().toString(),
+                        one.scheme().reference().toString(),
+                        one.category().name(),
+                        one.scheme().needsInspection() ? "yes" : "no",
+                        one.scheme().doubler().weight().toPlainString(),
+                        one.embodied().toString(),
+                        String.valueOf(one.atUsage().cycles().count()),
+                        one.removed().map(LocalDate::toString).orElse("")))
+                .toList();
+    }
+
+    /** A tail's repair register, the way the airworthiness office files it. */
+    public static String repairsAsCsv(List<RepairRecord> repairs) {
+        return asCsv(REPAIR_HEADER, repairRows(repairs));
     }
 
     /** How many rows a written file carries, header not counted. */
